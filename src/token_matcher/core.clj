@@ -241,33 +241,34 @@
 (defn num-tokens-range [attrs min max]
   (assoc (assoc attrs :min-tokens min) :max-tokens max))
 
-(defn conjoin-restriction [latest existing]
-  (if (nil? existing)
-    latest
-    (if (nil? latest)
-      existing
+;;; 'earlier' to be evaluated before 'later'.
+(defn conjoin-restrictions [earlier later]
+  (if (nil? later)
+    earlier
+    (if (nil? earlier)
+      later
       ;; Else neither is nil.
-      (let [existing-conjuncts (if (= (first existing) 'and)
-                                 (rest existing)
-                                 (list existing))
-            latest-conjuncts (if (= (first latest) 'and)
-                               (rest latest)
-                               (list latest))]
-        `(~'and ~@existing-conjuncts ~@latest-conjuncts)))))
+      (let [later-conjuncts (if (= (first later) 'and)
+                              (rest later)
+                              (list later))
+            earlier-conjuncts (if (= (first earlier) 'and)
+                                (rest earlier)
+                                (list earlier))]
+        `(~'and ~@earlier-conjuncts ~@later-conjuncts)))))
 
-(defn adjoin-action [latest existing]
-  (if (nil? existing)
-    latest
-    (if (nil? latest)
-      existing
+(defn adjoin-actions [later earlier]
+  (if (nil? later)
+    earlier
+    (if (nil? earlier)
+      later
       ;; Else neither is nil.
-      (let [existing-statements (if (= (first existing) 'do)
-                                 (rest existing)
-                                 (list existing))
-            latest-statements (if (= (first latest) 'do)
-                               (rest latest)
-                               (list latest))]
-        `(~'do ~@existing-statements ~@latest-statements)))))  
+      (let [later-statements (if (= (first later) 'do)
+                               (rest later)
+                               (list later))
+            earlier-statements (if (= (first earlier) 'do)
+                                 (rest earlier)
+                                 (list earlier))]
+        `(~'do ~@earlier-statements ~@later-statements)))))  
 
 (defn digit-string? [string]
   ;; Encapsulate the regex inside this function, because expressions
@@ -275,14 +276,16 @@
   ;; identity equality).
   (re-matches #"\d*" string))
 
+;;; Restrict 'self' to a single, all-digit token.
 (defn digits-alone [attrs self]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restriction `(digit-string? ~self)
-                                        (get attrs :finally?))))
+         :finally? (conjoin-restrictions `(digit-string? ~self)
+                                         (get attrs :finally?))))
 
+;;; Restrict 'self' to a single token of exactly n digits.
 (defn n-digits-alone [attrs self n]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restriction
+         :finally? (conjoin-restrictions
                     `(~'and ; Standardize 'and'.
                       (digit-string? ~self)
                       (= (count ~self) ~n))
@@ -290,29 +293,30 @@
 
 (defn same-when-bound [attrs self other]
   (assoc attrs
-         :finally? (conjoin-restriction `(if (and ~other ~self)
-                                           (= ~self ~other)
-                                           true)
-                                        (get attrs :finally?))))
+         :finally? (conjoin-restrictions `(if (and ~other ~self)
+                                            (= ~self ~other)
+                                            true)
+                                         (get attrs :finally?))))
 
 (defn different-when-bound [attrs self other]
   (assoc attrs
-         :finally? (conjoin-restriction `(if (and ~other ~self)
-                                           (not (= ~self ~other))
-                                           true)
-                                        (get attrs :finally?))))
+         :finally? (conjoin-restrictions `(if (and ~other ~self)
+                                            (not (= ~self ~other))
+                                            true)
+                                         (get attrs :finally?))))
 
 ;;; To qualify a series of (comma-free, natural) integers.  
 (defn digits-along [attrs self]
-  (assoc {} :each? (conjoin-restriction `(digit-string? ~self)
-                                        (get attrs :each?))))
+  (assoc attrs 
+         :each? (conjoin-restrictions `(digit-string? ~self)
+                                      (get attrs :each?))))
 ;;; The ':each?' definition above is more efficient than the
 ;;; ':finally?'  version commented out below.
 (comment
   (defn digits-along [attrs self]
-    (assoc {} :finally? (conjoin-restriction `(every? #(re-matches #"\d*" %)
-                                                      (instance->tokens ~self))
-                                             (get attrs :finally?)))))
+    (assoc attrs :finally? (conjoin-restrictions `(every? #(re-matches #"\d*" %)
+                                                          (instance->tokens ~self))
+                                                 (get attrs :finally?)))))
 
 ;;; Attribute short-hand functions ^^
 ;;; ----------------------------------------------------------------
@@ -409,7 +413,7 @@
 (defn initialize-current-+set [current-var bindings matcher-kind-instances]
   (let [current-binding (get bindings (plain-var current-var))]
     (if current-binding
-      #{(str/lower-case current-binding)} ; Have to match existing binding.
+      #{(str/lower-case current-binding)} ; Have to match later binding.
       (when (+var? current-var)
         (let [instances (+var-kind-instances current-var matcher-kind-instances)]
           (when instances
@@ -787,6 +791,34 @@
        ;; A using application should decide what to do with these, when
        ;; *matches* has more than one entry.
        [@*matches* @*kind-instances*]))))
+
+;;; Versions for pre-parsed templates (so that they may be applied
+;;; many times, without re-parsing):
+
+(defn match-pre-parsed [parsed-template input-string]
+  (binding [*matches* (atom #{})
+            *matches-countdown* (atom 1)
+            *template-vars* (template-vars parsed-template)]
+    ;; Returns the last match found.
+    (match-constructs parsed-template
+                      (parse-input-string input-string))
+    ;; Not needed: (nth @*matches* 0)
+    ))
+
+(defn matches-pre-parsed
+  ([parsed-template input-string]
+   (matches-pre-parsed parsed-template input-string nil))
+  ;; 'limit' should be a positive integer.
+  ([parsed-template input-string limit]
+   (binding [*matches* (atom #{})
+             *matches-countdown* (when limit (atom limit))
+             *template-vars* (template-vars parsed-template)
+             *kind-instances* *kind-instances*]
+     (match-constructs parsed-template
+                       (parse-input-string input-string))
+     ;; A using application should decide what to do with these, when
+     ;; *matches* has more than one entry.
+     [@*matches* @*kind-instances*])))
 
 ;;; Template matcher (core) ^^
 ;;; ----------------------------------------------------------------

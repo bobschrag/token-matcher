@@ -22,10 +22,16 @@ reference to any named set, may also be tasked (via annotation) to
 extend a named set with their binding---even dynamically, during the
 course of processing a single template.
 
-The matcher affords access to user/application-defined Clojure
-functions called on var arguments to help define the attributes of
-"annotated" vars (see below), to qualify would-be-complete or partial
-instances, and to perform any side-effecting actions.
+Var annotations also admit raw Clojure expressions used as
+"restrictions" that qualify would-be-complete or partial var instances
+or as "actions" evaluated for side effects.  We wrap restriction or
+action expressions to make template vars' so-far-matched values (using
+`nil`, if unmatched) accessible.
+
+We call user- or application-defined "short-hand" functions with var
+arguments to help define the attributes of annotated vars.  The
+short-hand functions are in effect macros that our parser expands,
+deferring evaluation to annotated var match time.
 
 Template-embedded lists headed by "control" keywords can be nested to
 turn on or off token matching case sensitivity and to specify
@@ -33,8 +39,11 @@ optional, one-of-choice, or standard token-series content.
 
 Top-level interface macros allow application developers to define a
 function of a fixed template and an input string argument, in which
-the function body refers directly to the template's variables to
-access their bindings.
+the function body is wrapped similarly to restrictions and actions.
+
+All these abstractions contribute towards maximizing locality of
+reference among an application's authored templates, thus enhancing
+programmer productivity and product maintainability.
 
 See examples forthcoming next.
 
@@ -60,23 +69,30 @@ Sections following these examples present detailed documentation.
 ### Plain var examples
 
 ```clojure
-> (match "foo" "foo")
+> (match "foo"
+          "foo")
 {} ; Empty hashmap.
 
-> (match "foo" "bar")
+> (match "foo"
+         "bar")
 nil ; No match.
 
-> (match "*foo *foo" "bar bar")
+> (match "*foo *foo"
+         "bar bar")
 {*foo "bar"} ; Consistently bound.
+
+> (match "*foo *bar"
+         "ho ho")
+{*foo "ho" *bar "ho"}
 
 > (match "do *something with *something-else" 
          "do all the good you can with all you've got")
 {*something "all the good you can", 
  *something-else "all you've got"}
 
-> ;;; +Var with registered kind:
+> ;;; +Var with (hypotehtically) registered kind:
 > (match '(+fruits to +nuts)
-          "apples to filberts")
+         "apples to filberts")
 {+fruits "apples", +nuts "filberts"}
 
 ```
@@ -87,27 +103,91 @@ nil ; No match.
 > (match '([+fruits {:kind #{"apples" "pumpkins" "pears"}}]
             to 
 	    [+nuts {:kind #{"Brazils" "almonds" "filberts"}}])
-          "apples to filberts")
+         "apples to filberts")
 {+fruits "apples", +nuts "filberts"}
+```
 
-> ;;; Var with binding restriction:
+#### Restriction examples
+```clojure
 > (match '(*foo [*bar {:finally? (not (= *bar *foo))}])
-          "ho ho")
-nil
+         "ho ho")
+nil ; They are equal.
 
-> ;;; Short-hand attribute function:
-> (match '([*int (digits-alone {} *int)]) "29")
-{*int "29"}
-> ;;; Another:
+> (match '(*foo [*bar {:finally? (= *bar *foo)}])
+         "ho ho")
+{*foo "ho" *bar "ho"}
+```
+
+#### Short-hand attribute function call examples
+```clojure
+;;; Functions:
+
+(defn digit-string? [string]
+  (re-matches #"\d*" string))
+
+;;; Restrict 'self' to a single, all-digit token.
+(defn digits-alone [attrs self]
+  (assoc (assoc attrs :max-tokens 1)
+         :finally? (conjoin-restrictions `(digit-string? ~self)
+                                         (get attrs :finally?))))
+
+;;; Restrict 'self' to a single token of exactly n digits.
+(defn n-digits-alone [attrs self n]
+  (assoc (assoc attrs :max-tokens 1)
+         :finally? (conjoin-restrictions
+                     `(~'and ; Standardize 'and'.
+                       (digit-string? ~self)
+                       (= (count ~self) ~n))
+                     (get attrs :finally?))))
+
+;;; To qualify a series of (comma-free, natural) integers.  
+(defn digits-along [attrs self]
+  (assoc attrs 
+         :each? (conjoin-restrictions `(digit-string? ~self)
+                                      (get attrs :each?))))
+
+
+> ;;; Expansions:
+
+> (parse-template '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                          *int
+                                          3)]))
+([*int {:finally? (and (token-matcher.core/digit-string? *int)
+                       (clojure.core/= (clojure.core/count *int) 3)
+                       (> (read-string *int) 99)),
+        :max-tokens 1}])
+
+> (parse-template '([*ints (digits-along {} *ints)]))
+([*ints {:each? (token-matcher.core/digit-string? *ints)}])
+
+;;; Vars with short-hand calls:
+
+> (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+         "1001")
+nil ; Too many digits.
+> (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+         "001")
+nil ; Too small a number.
+> (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+         "101")
+{*int "101"}
 > (match '([*ints (digits-along {} *ints)]) "29 no")
-nil
+nil ; "no" not digits.
+> (match '([*ints (digits-along {} *ints)]) "29 010")
+{*ints "29 010"}
 ```
 
 ### Template control examples:
 ```clojure
 > (binding [*case-sensitive* true]
       (match "Foo" "foo"))
-nil
+nil ; Cases don't match.
 
 > (binding [*case-sensitive* true]
       (match "(:-case Foo)" "foo"))
@@ -149,7 +229,7 @@ In production rules below, ...
 
 We present first standard, internal template form, then extend this to
 input template form accommodating short-hand function calls that
-should expand into internal form.
+should expand (during parsing) into internal form.
 
 ### Internal template form
 
@@ -368,10 +448,10 @@ attributes include...
   ```clojure
   (defn different-when-bound [attrs self other]
     (assoc attrs
-           :finally? (conjoin-restriction `(if (and ~other ~self)
-                                             (not (= ~self ~other))
-                                             true)
-                                          (get attrs :finally?))))
+           :finally? (conjoin-restrictions `(if (and ~other ~self)
+                                              (not (= ~self ~other))
+                                              true)
+                                           (get attrs :finally?))))
   ```
   
   We accommodate compound conditions via `and`, `or`, `not`, ...
@@ -382,7 +462,7 @@ attributes include...
   In this setting, also, we bind any elided optional-scope vars to
   `nil`.  (`different-when-bound` remains a good reference, form-wise.
   Replace the truthy condition with some side effect.  Call
-  `adjoin-action` rather than `conjoin-restriction`.)
+  `adjoin-actions` rather than `conjoin-restrictions`.)
 
   While we've arranged for *vars with attribute `:kind` to write their
   instances to a registry here, we look forward to connecting more
@@ -426,8 +506,8 @@ characters are (per the regex uesd in `digit-string?`) digits.
 
 (defn digits-alone [attrs self]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restriction `(digit-string? ~self)
-                                        (get attrs :finally?))))
+         :finally? (conjoin-restrictions `(digit-string? ~self)
+                                         (get attrs :finally?))))
 ```
 
 To keep templates uncluttered, we walk them to quote short-hand
@@ -454,11 +534,11 @@ functions and tests, an attribute short-hand function...
 ```clojure
 (defn n-digits-alone [attrs self n]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restriction
-                    `(~'and
-                      (digit-string? ~self)
-                      (= (count ~self) ~n))
-                    (get attrs :finally?))))
+         :finally? (conjoin-restrictions
+                     `(~'and
+                       (digit-string? ~self)
+                       (= (count ~self) ~n))
+                     (get attrs :finally?))))
 ```
 
 ## Template controls
@@ -524,6 +604,10 @@ We provide several interfaces for interacting with the matcher.
   - The input includes consecutive like tokens that may match a
     pattern variable.
 
+- `match-pre-parsed` and `matches-pre-parsed`---versions of `match`
+  and `matches` that skip the work of parsing, in case a template may
+  be applied repeatedly.
+
 - Two macros for defining functions that match an input argument to a
   fixed template and expose the template's variables and matched
   values as locals in the defined function's body.  Here again, we
@@ -553,6 +637,11 @@ cases.
 
 Besides replacing our kind registry with logic-based type reasoning,
 we might...
+
+- Enable short-hand function calls at the sequence level, splicing in
+  results to yield standard, internal form.  This is an easy lift,
+  awaiting a real-world use case where we expect clear benefit from
+  further enhancing locality of reference in this way.
 
 - Support explicit anonymous vars (say, `*_`, `+_`) for which
   no bindings are recorded (so, for which consistency across
@@ -594,10 +683,9 @@ we might...
 - Return either longest or shortest var bindings first.  With supposed
   dynamic variable `*shortest-first*` (and controls `:shortest`,
   `:longest`), prefer eliding optional content.  Handle corresponding
-  controls `:shortest`, `:longest` like `:+case`, `:-case`.
-
-- Enable short-hand function calls at the sequence level, splicing in
-  results to yield standard, internal form.
+  controls `:shortest`, `:longest` like `:+case`, `:-case`.  Again,
+  this is an easy lift for which we await a use case it would matter
+  in.
 
 ### Ideas for efficiency
 
@@ -625,7 +713,7 @@ application mixes, depending on indexing and compilation overhead.
       pairwise.
 
     - The remaining indices of a template or control branch thereof do
-      not exceed correspondign tokens' indices in input.
+      not exceed corresponding tokens' indices in input.
 
 - Perhaps in addition to indexing, ...
 
@@ -654,7 +742,7 @@ broader range of use cases, we might...
 
 - Perform systematic error checking and exception handling.
 
-- Employ `recur` or trampoline for tail recursion optimization, to
+- Employ `recur` or `trampoline` for tail recursion optimization, to
   obviate deep call stacks.
 
 - Enhance tests by arranging for them to bind explicit values for the
@@ -685,3 +773,9 @@ Public License as published by the Free Software Foundation, either
 version 2 of the License, or (at your option) any later version, with
 the GNU Classpath Exception which is available at
 https://www.gnu.org/software/classpath/license.html.
+
+## Acknowledgements
+
+Thanks to folks at Franz (Inc.) and at Elemental Cognition (Inc.) for
+posing inspiring problems and to folks on Clojurians Slack channel
+`#beginners` for generous advice.

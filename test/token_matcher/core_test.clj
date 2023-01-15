@@ -78,10 +78,19 @@
     (is (= '([*int
               {:finally?
                (and
-                (> (read-string *int) 28)
-                (token-matcher.core/digit-string? *int)),
+                (token-matcher.core/digit-string? *int)
+                (> (read-string *int) 28)),
                :max-tokens 1}])
            (parse-template '([*int (digits-alone {:finally? (> (read-string *int) 28)} *int)]))))
+    (is (= '([*int
+              {:finally? (and
+                          (token-matcher.core/digit-string? *int)
+                          (clojure.core/= (clojure.core/count *int) 3)
+                          (> (read-string *int) 99)),
+               :max-tokens 1}])
+           (parse-template '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                                   *int
+                                                   3)]))))
     ))
 
 (deftest template-local
@@ -313,6 +322,21 @@
            (match '([*ints (digits-along {} *ints)]) "29 30")))
     (is (= nil
            (match '([*ints (digits-along {} *ints)]) "29 no")))
+    (is (= nil
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+                  "1001")))
+    (is (= nil
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+                  "001")))
+    (is (= '{*int "101"}
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+                                 *int
+                                 3)])
+                  "101")))
     ;; Actions:
     (binding [token-matcher.core-test/*test-atom* (atom nil)]
       (match '([*foo {:finally. (reset! token-matcher.core-test/*test-atom*
