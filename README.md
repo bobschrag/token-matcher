@@ -41,8 +41,8 @@ Top-level interface macros allow application developers to define a
 function of a fixed template and an input string argument, in which
 the function body is wrapped similarly to restrictions and actions.
 
-All these abstractions contribute towards maximizing locality of
-reference among an application's authored templates, thus enhancing
+These constructs contribute towards minimizing repetition of
+expressions among an application's authored templates, thus enhancing
 programmer productivity and product maintainability.
 
 See examples forthcoming next.
@@ -640,8 +640,8 @@ we might...
 
 - Enable short-hand function calls at the sequence level, splicing in
   results to yield standard, internal form.  This is an easy lift,
-  awaiting a real-world use case where we expect clear benefit from
-  further enhancing locality of reference in this way.
+  awaiting a real-world use case where it clearly furthers code
+  duplication avoidance.
 
 - Support explicit anonymous vars (say, `*_`, `+_`) for which
   no bindings are recorded (so, for which consistency across
@@ -684,8 +684,8 @@ we might...
   dynamic variable `*shortest-first*` (and controls `:shortest`,
   `:longest`), prefer eliding optional content.  Handle corresponding
   controls `:shortest`, `:longest` like `:+case`, `:-case`.  Again,
-  this is an easy lift for which we await a use case it would matter
-  in.
+  this is an easy lift for which we await a use case it would clearly
+  matter in.
 
 ### Ideas for efficiency
 
