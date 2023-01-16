@@ -90,7 +90,7 @@ nil ; No match.
 {*something "all the good you can", 
  *something-else "all you've got"}
 
-> ;;; +Var with (hypotehtically) registered kind:
+> ;;; +Var with (hypothetically) registered kind:
 > (match '(+fruits to +nuts)
          "apples to filberts")
 {+fruits "apples", +nuts "filberts"}
