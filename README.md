@@ -30,8 +30,8 @@ action expressions to make template vars' so-far-matched values (using
 
 We call user- or application-defined "short-hand" functions with var
 arguments to help define the attributes of annotated vars.  The
-short-hand functions are in effect macros that our parser expands,
-deferring evaluation to annotated var match time.
+short-hand functions act like macros whose returned 
+content our parser splices into a match template before processing.
 
 Template-embedded lists headed by "control" keywords can be nested to
 turn on or off token matching case sensitivity and to specify
