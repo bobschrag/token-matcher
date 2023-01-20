@@ -2,12 +2,15 @@
   (:require [clojure.test :refer :all]
             [token-matcher.core :refer :all]))
 
-(deftest isolating-chars
+(deftest isolate-declared-chars-test
   (testing "isolate-chars"
     (is '["(" "foo" "(" "bar" "(" "baz" "like" ")" ")" ")"]
-        (isolate-declared-chars "(foo (bar (baz like)))"))))
+        (isolate-declared-chars "(foo (bar (baz like)))"))
+    (is ["(" "foo" "(" "ba" "[" "r" "(" "baz" "li" "]" "ke" ")" ")" ")"]
+        (isolate-declared-chars "(foo (ba[r (baz li]ke)))"))
+    ))
 
-(deftest stripping-leading-chars
+(deftest strip-leading-chars-test
   (testing "strip-leading-chars"
     (is (= "" (strip-leading-chars "")))
     (is (= "Foo" (strip-leading-chars "Foo")))
@@ -15,7 +18,7 @@
     (is (= "" (strip-leading-chars ".")))
     (is (= "" (strip-leading-chars "?")))))
 
-(deftest stripping-trailing-chars
+(deftest strip-trailing-chars-test
   (testing "strip-trailing-chars"
     (is (= "" (strip-trailing-chars "")))
     (is (= "Foo" (strip-trailing-chars "Foo.")))
@@ -27,7 +30,7 @@
       (is (= "Foo" (strip-trailing-chars "Foo'")))
       (is (= "Foo" (strip-trailing-chars "Foo'."))))))
 
-(deftest normalizing-tokens
+(deftest normalize-token-test
   (testing "normalize-token"
     (binding [*token-substitutions* {"happy" "glad"}]
       (is (= "foo" (normalize-token "foo")))
@@ -42,18 +45,18 @@
     (is (= true (+var? '+foo)))
     (is (= nil (+var? 'foo)))))
 
-(deftest updating-var-val
+(deftest updated-var-val-test
   (testing "updated-var-val"
     (is "bar bell" (updated-var-val "bar" 'bell))))
 
-(deftest pruning-by-prefix
+(deftest pruned-by-prefix-test
   (testing "pruned-by-prefix"
     (is (= #{} (pruned-by-prefix #{"f" "ff" "gf"} "x")))
     (is (= #{} (pruned-by-prefix #{"22"} "1"))) ; Handle a too-long prefix.
     (is (= #{"f" "ff"} (pruned-by-prefix #{"f" "ff" "gf"} "f")))
     (is (= #{"f" "ff" "gf"} (pruned-by-prefix #{"f" "ff" "gf"} "")))))
 
-(deftest kind-interface
+(deftest kind-interface-test
   (testing "kind interface"
     (do (initialize-kind-instances)
         (add-kind 'object)
@@ -62,12 +65,12 @@
         (is (= #{:bar :foo}
                (get @*kind-instances* 'object))))))
 
-(deftest guarding-template-vars
+(deftest guard-template-vars-test
   (testing "guard-template-vars"
     (is (= '{*bar "bar", *a nil, *b nil}
            (guard-template-vars '{*bar "bar"} '(*a *b))))))
 
-(deftest parsing-template
+(deftest parse-template-test
   (testing "parse-template"
     ;; These assertions will always fail, because Clojure doesn't have
     ;; regex equality.  But you should be able to see things are
@@ -88,12 +91,12 @@
                           (clojure.core/= (clojure.core/count *int) 3)
                           (> (read-string *int) 99)),
                :max-tokens 1}])
-           (parse-template '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+           (parse-template '([*int (n-digits-alone {:finally? (> (read-string *int) 99)}
                                                    *int
                                                    3)]))))
     ))
 
-(deftest template-local
+(deftest template-local-test
   (testing "Locals in template"
     ;; Local scope:
     (let [max 3
@@ -109,7 +112,7 @@
              (match `([~'*foo ~(max-limited-digits '*foo)]
                       [~'*bar ~(max-limited-digits '*bar)])
                     "23 4321")))
-      (is (= '([*foo	  
+      (is (= '([*foo
 	        {:max-tokens 1,
 	         :finally?
 	         (clojure.core/and
@@ -128,7 +131,7 @@
 (def ^:dynamic *test-atom* (atom nil))
 
 ;;; TODO: Explicit/alternative bindings for dynamic Clojure vars.
-(deftest matching-template
+(deftest match-test
   (testing "match"
     ;; No vars.
     ;; Not handled: (is (= {} (match "" "")))
@@ -167,7 +170,7 @@
     (is (= '{*foo "bar"} (match "*foo *foo" "bar bar")))
     (is (= nil (match "*foo *foo" "bar bell")))
     ;; Addressing +vars:
-    (binding [*kind-instances* (atom '{kind   #{"really" "really big show" 
+    (binding [*kind-instances* (atom '{kind   #{"really" "really big show"
                                                 "John" "John Smith"}
                                        kinder #{"kinder" "kinder gentler"
                                                 "something" "something really big"}
@@ -244,7 +247,7 @@
     (is (= '{*bar "Hello", *foo "Dolly"}
            (match "(:optional *bar) (:optional *baz) *foo"
                   "Hello, Dolly!")))
-    (binding [*kind-instances* (atom '{kind   #{"really" "really big show" 
+    (binding [*kind-instances* (atom '{kind   #{"really" "really big show"
                                                 "John" "John Smith"}
                                        kinder #{"kinder" "kinder gentler"
                                                 "something" "something really big"}
@@ -292,7 +295,7 @@
     (is (= nil (match '(nil *foo) "nil false")))
     (is (= '{*foo "false"} (match '("nil" *foo) "nil false")))
     ;; Restrictions:
-    (is (= nil (match '(*foo [*bar {:finally? (not (= *bar *foo))}])
+    (is (= nil (match '(*foo [*bar {:finally? (not= *bar *foo)}])
                       "ho ho")))
     (is (= '{*foo "ho", *bar "ho"}
            (match '(*foo [*bar {:finally? (= *bar *foo)}])
@@ -307,7 +310,7 @@
            ;; refer to the current var.
            (match '(*foo [*bar {:always? (< (count-tokens *foo) 2)}])
                   "ho ho ho")))
-    ;; Shorthand restrictions: 
+    ;; Shorthand restrictions:
     (is (= '{*int "29"}
            (match '([*int (digits-alone {} *int)]) "29")))
     (is (= nil
@@ -323,17 +326,17 @@
     (is (= nil
            (match '([*ints (digits-along {} *ints)]) "29 no")))
     (is (= nil
-           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)}
                                  *int
                                  3)])
                   "1001")))
     (is (= nil
-           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)}
                                  *int
                                  3)])
                   "001")))
     (is (= '{*int "101"}
-           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
+           (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)}
                                  *int
                                  3)])
                   "101")))
@@ -355,7 +358,7 @@
       (is (= nil (match "(:+case Foo)" "foo")))
       (is (= nil (match "(:-case Foo) Bar" "foo bar")))
       (is (= {} (match "(:-case Foo) (:-case Bar)" "foo bar")))
-      (binding [*kind-instances* (atom '{kind #{"really" "really big show" 
+      (binding [*kind-instances* (atom '{kind #{"really" "really big show"
                                                 "John" "John Smith"}})]
         (is (= nil (match "+kind" "john")))))
     (binding [*case-sensitive* false]
@@ -405,14 +408,14 @@
       (is (= {} (match '(:series (:optional (:choice (:-case foo)))) "Foo"))))
     ))
 
-(deftest templates-matches
+(deftest matches-test
   (testing "matches"
     (initialize-kind-instances)
     (is (= '[#{{*foo "one", *bar "two three"} {*foo "one two", *bar "three"}} {}]
            (matches "*foo *bar" "one two three")))
     ))
 
-(deftest defn-templaters
+(deftest defn-templaters-test
   (testing "defn-templating forms"
     (is (= '(defn list-outer-symbols [phrase]
               (let [bindings-hashmap (token-matcher.core/match '"*front stuff *back" phrase)]
@@ -456,7 +459,7 @@
                              (list *foo)))))
     ))
 
-(deftest with-matching-macros
+(deftest with-matching-macros-test
   (testing "with-matching-macros"
     ;; With optional var, list template:
     (is (= '(clojure.core/let [*foo 'nil] true)
@@ -464,4 +467,3 @@
     (is (= true
            (with-matching-template-symbols [((:optional *foo)) ""] true)))
     ))
-

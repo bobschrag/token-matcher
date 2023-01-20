@@ -122,28 +122,28 @@ nil ; They are equal.
 ```clojure
 ;;; Functions:
 
-(defn digit-string? [string]
-  (re-matches #"\d*" string))
+(defn digit-string? [s]
+  (re-matches #"\d*" s))
 
-;;; Restrict 'self' to a single, all-digit token.
-(defn digits-alone [attrs self]
+;;; Restrict 'this' to a single, all-digit token.
+(defn digits-alone [attrs this]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restrictions `(digit-string? ~self)
+         :finally? (conjoin-restrictions `(digit-string? ~this)
                                          (get attrs :finally?))))
 
-;;; Restrict 'self' to a single token of exactly n digits.
-(defn n-digits-alone [attrs self n]
+;;; Restrict 'this' to a single token of exactly n digits.
+(defn n-digits-alone [attrs this n]
   (assoc (assoc attrs :max-tokens 1)
          :finally? (conjoin-restrictions
                      `(~'and ; Standardize 'and'.
-                       (digit-string? ~self)
-                       (= (count ~self) ~n))
+                       (digit-string? ~this)
+                       (= (count ~this) ~n))
                      (get attrs :finally?))))
 
 ;;; To qualify a series of (comma-free, natural) integers.  
-(defn digits-along [attrs self]
+(defn digits-along [attrs this]
   (assoc attrs 
-         :each? (conjoin-restrictions `(digit-string? ~self)
+         :each? (conjoin-restrictions `(digit-string? ~this)
                                       (get attrs :each?))))
 
 
@@ -443,13 +443,13 @@ attributes include...
   code can branch on that.  See, e.g., our definition for
   `different-when-bound`.  Call functions that are closures to
   access local content in their captured scope.  See our test
-  `template-local`.
+  `template-local-test`.
 
   ```clojure
-  (defn different-when-bound [attrs self other]
+  (defn different-when-bound [attrs this other]
     (assoc attrs
-           :finally? (conjoin-restrictions `(if (and ~other ~self)
-                                              (not (= ~self ~other))
+           :finally? (conjoin-restrictions `(if (and ~other ~this)
+                                              (not (= ~this ~other))
                                               true)
                                            (get attrs :finally?))))
   ```
@@ -475,7 +475,7 @@ attributes include...
   Given that even "qualified finally" bindings may be backtracked out
   of without having been included in a complete match, we recommend
   deferring material actions to a template's final var, if not to a
-  calling application itself (considering that a given template and
+  calling application itthis (considering that a given template and
   input string may not match uniquely).
 
   Example: `{:finally. (println (format-cl "Matched *part to
@@ -501,12 +501,12 @@ is to restrict `*int`'s binding to a single token, all of whose
 characters are (per the regex uesd in `digit-string?`) digits.
 
 ```clojure
-(defn digit-string? [string]
-  (re-matches #"\d*" string))
+(defn digit-string? [s]
+  (re-matches #"\d*" s))
 
-(defn digits-alone [attrs self]
+(defn digits-alone [attrs this]
   (assoc (assoc attrs :max-tokens 1)
-         :finally? (conjoin-restrictions `(digit-string? ~self)
+         :finally? (conjoin-restrictions `(digit-string? ~this)
                                          (get attrs :finally?))))
 ```
 
@@ -518,7 +518,7 @@ manually as necessary, as in `(digits-alone {} '*int)`.
 As you can see in our definitions for `digits-alone` and related
 functions and tests, an attribute short-hand function...
 
-- Should include at least an argument (we use `self`) to
+- Should include at least an argument (we use `this`) to
   accommodate the plain version of the current var (e.g., `*int`).
 
 - May include arguments to accommodate any vars in using
@@ -532,12 +532,12 @@ functions and tests, an attribute short-hand function...
   `n-digits-alone`.
 
 ```clojure
-(defn n-digits-alone [attrs self n]
+(defn n-digits-alone [attrs this n]
   (assoc (assoc attrs :max-tokens 1)
          :finally? (conjoin-restrictions
                      `(~'and
-                       (digit-string? ~self)
-                       (= (count ~self) ~n))
+                       (digit-string? ~this)
+                       (= (count ~this) ~n))
                      (get attrs :finally?))))
 ```
 
