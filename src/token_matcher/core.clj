@@ -139,7 +139,7 @@
   ([kind]
    (swap! *kind-instances* assoc kind #{}))
   ;; For matcher-internal version supporting backtracking---does not
-  ;; affect the global..
+  ;; affect the global.
   ([instances kind]
    (assoc instances kind #{})))
 
