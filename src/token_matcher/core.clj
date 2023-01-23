@@ -138,7 +138,8 @@
   "Add kind `kind` [with instances `instances`] to `*kind-instances*`."
   ([kind]
    (swap! *kind-instances* assoc kind #{}))
-  ;; For matcher-internal version supporting backtracking.
+  ;; For matcher-internal version supporting backtracking---does not
+  ;; affect the global..
   ([instances kind]
    (assoc instances kind #{})))
 
@@ -148,7 +149,7 @@
    (when-not (get @*kind-instances* kind)
      (add-kind kind))
    (swap! *kind-instances* update kind conj instance))
-  ;; Matcher-internal version.
+  ;; Matcher-internal version---does not affect the global.
   ([instances kind instance]
    (update (add-kind instances kind) ; No effect for exising kind.
            kind conj instance)))
