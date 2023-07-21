@@ -69,12 +69,10 @@ Sections following these examples present detailed documentation.
 ### Plain var examples
 
 ```clojure
-> (match "foo"
-          "foo")
+> (match "foo" "foo")
 {} ; Empty hashmap.
 
-> (match "foo"
-         "bar")
+> (match "foo" "bar")
 nil ; No match.
 
 > (match "*foo *foo"
@@ -83,17 +81,21 @@ nil ; No match.
 
 > (match "*foo *bar"
          "ho ho")
-{*foo "ho" *bar "ho"}
+{*foo "ho", *bar "ho"}
 
 > (match "do *something with *something-else" 
          "do all the good you can with all you've got")
 {*something "all the good you can", 
  *something-else "all you've got"}
 
-> ;;; +Var with (hypothetically) registered kind:
+> ;;; +Var with (hypothetically) registered kinds:
 > (match '(+fruits to +nuts)
          "apples to filberts")
 {+fruits "apples", +nuts "filberts"}
+
+> (match '(+fruits to +nuts)
+         "apples to apples")
+nil ; Apples are not nuts.
 
 ```
 
@@ -414,8 +416,8 @@ attributes include...
       attribute.
 
 - Token cardinality restrictions, as in `[*book_2 {:kind book
-  :min-tokens` \<min\> :max-tokens \<max\>}]`, where both \<min\> and
-  \<max\> are integers \>= 1
+  :min-tokens` \<min\> `:max-tokens` \<max\>`}]`, where both \<min\>
+  and \<max\> are integers \>= 1
 
 - Instance restrictions---Clojure forms that must evaluate
   truthy (i.e., other than `false` or `nil`) to qualify a
@@ -475,8 +477,8 @@ attributes include...
   Given that even "qualified finally" bindings may be backtracked out
   of without having been included in a complete match, we recommend
   deferring material actions to a template's final var, if not to a
-  calling application itthis (considering that a given template and
-  input string may not match uniquely).
+  calling application (considering that a given template and input
+  string may not match uniquely).
 
   Example: `{:finally. (println (format-cl "Matched *part to
   \'~a\'..." *part))}`.
@@ -601,8 +603,7 @@ We provide several interfaces for interacting with the matcher.
   - The template has consecutive vars---especially consecutive
     *vars.
 
-  - The input includes consecutive like tokens that may match a
-    pattern variable.
+  - The input includes consecutive like tokens that may match a var.
 
 - `match-pre-parsed` and `matches-pre-parsed`---versions of `match`
   and `matches` that skip the work of parsing, in case a template may
