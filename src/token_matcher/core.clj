@@ -1,6 +1,7 @@
 (ns token-matcher.core
   (:require [clojure.pprint :refer [cl-format]]
             [clojure.string :as str]
+            [clojure.set]
             [riddley.walk :refer [walk-exprs]]
             ))
 
