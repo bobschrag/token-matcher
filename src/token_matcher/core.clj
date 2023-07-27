@@ -1,5 +1,6 @@
 (ns token-matcher.core
-  (:require [clojure.pprint :refer [cl-format]]
+  (:require [clolog.core :as clolog :refer :all]
+            [clojure.pprint :refer [cl-format]]
             [clojure.string :as str]
             [clojure.set]
             [riddley.walk :refer [walk-exprs]]
@@ -24,7 +25,7 @@
     (take-while (complement #{::eof})
                 (repeatedly #(read {:eof ::eof} r)))))
 
-(defn standard-split
+(defn- standard-split
   "Split `s` at whitespace chars, returning a vec of (unnormalized)
   tokens."
   [s]
@@ -35,7 +36,7 @@
   ;; Don't remove any of these chars:
   #{\( \) \[ \] \{ \}})
 
-(defn isolate-declared-chars
+(defn- isolate-declared-chars
   "Perform a standard split, after isolating chars in
   `*chars-to-isolate*` to single-char tokens."
   [s]
@@ -52,10 +53,10 @@
   input token."
   #{\, \. \; \: \? \! \" \'})
 
-(defn strippable? [char]
+(defn- strippable? [char]
   (contains? *chars-to-strip* char))
 
-(defn strip-leading-chars
+(defn- strip-leading-chars
   "Strip strippable leading chars from token."
   [s]
   (if-not (seq s)
@@ -68,7 +69,7 @@
 
 (def ^:dynamic *allow-trailing-apostrophe* false)
 
-(defn strip-trailing-chars
+(defn- strip-trailing-chars
   "Strip strippable trailing chars from token."
   [s]
   (if-not (seq s)
@@ -94,7 +95,7 @@
 ;;; TODO: Accommodate upper-case keys.
 (def ^:dynamic *token-substitutions* {})
 
-(defn normalize-token
+(defn- normalize-token
   "Strip token, apply single-token substitutions."
   [token]
   (let [token (strip-leading-chars token)
@@ -104,7 +105,7 @@
                   token)]
     token))
 
-(defn parse-input-string
+(defn- parse-input-string
   "Return a vector of the non-empty, normalized tokens of `s`."
   [s]
   (let [tokens (isolate-declared-chars s)
@@ -116,33 +117,23 @@
 ;;;;; ----------------------------------------------------------------
 ;;;;; Kind instance registration:
 
-;;; We provide a simple interface for registering a kind's instance
-;;; strings that a template's +var will match against.
+;;; We provide a rich interface---based on clolog---for registering a
+;;; kind's instance strings that a template's +var will match against.
 
-;;; Hashmap keys are kind symbols, values are sets of known
-;;; instances---token strings.  E.g., {exercise
-;;; #{"cycling" "swimming"}, recovery #{"refueling" "stretching"}}.
-(def ^:dynamic *kind-instances*
-  "Hashmap: {<<kind-sym> <kind-instance-set>>*}"
+(def ^:dynamic *kind-assertions*
+  "The knowledge base of assertions for token-matcher kind reasoning.
+  Initialized to the same value `clolog/initialize-prolog` uses for
+  `clolog/*assertions*`."
   (atom {}))
 
-(defn initialize-kind-instances []
-  (reset! *kind-instances* {}))
+(defn initialize-kind-assertions []
+  (binding [*assertions* *kind-assertions*]
+    (initialize-prolog))
+  ;; TODO: Assert generic type reasoning.
+  )
 
 (defn initialize-matcher []
   (initialize-kind-instances))
-
-;; In an efficient world, kind instances could be in a trie (i.e., a
-;; token prefix tree---ideally with hashmap levels), not in a flat set
-;; as here.  TODO
-(defn add-kind
-  "Add kind `kind` [with instances `instances`] to `*kind-instances*`."
-  ([kind]
-   (swap! *kind-instances* assoc kind #{}))
-  ;; For matcher-internal version supporting backtracking---does not
-  ;; affect the global.
-  ([instances kind]
-   (assoc instances kind #{})))
 
 (defn add-kind-instance
   "Add `instance` to `kind`."
@@ -155,7 +146,7 @@
    (update (add-kind instances kind) ; No effect for exising kind.
            kind conj instance)))
 
-(defn accept-matcher-kind-instances
+(defn- accept-matcher-kind-instances
   "Merge matcher-local `*kind-instances*` into global, via `swap!`."
   [local-instances]
   (map (fn [kind]
@@ -168,7 +159,7 @@
 ;;;;; ----------------------------------------------------------------
 ;;;;; Variables:
 
-(defn plain-*var? [construct]
+(defn- plain-*var? [construct]
   (if (and (symbol? construct)
            ;; 'name' here strips down to the simple symbol.
            (= (nth (name construct) 0) \*))
@@ -177,49 +168,49 @@
     ;; false.
     nil))
 
-(defn annotated-*var? [construct]
+(defn- annotated-*var? [construct]
   (if (and (vector? construct)
            (plain-*var? (first construct)))
     true
     nil))
 
-(defn *var? [construct]
+(defn- *var? [construct]
   (if (or (plain-*var? construct)
           (annotated-*var? construct))
     true
     nil))
 
-(defn plain-+var? [construct]
+(defn- plain-+var? [construct]
   (if (and (symbol? construct)
            (= (nth (name construct) 0) \+))
     true
     nil))
 
-(defn annotated-+var? [construct]
+(defn- annotated-+var? [construct]
   (if (and (vector? construct)
            (plain-+var? (first construct)))
     true
     nil))
 
-(defn +var? [construct]
+(defn- +var? [construct]
   (if (or (plain-+var? construct)
           (annotated-+var? construct))
     true
     nil))
 
-(defn annotated-var? [construct]
+(defn- annotated-var? [construct]
   (or (annotated-*var? construct)
       (annotated-+var? construct)))
 
-(defn plain-var? [construct]
+(defn- plain-var? [construct]
   (or (plain-*var? construct)
       (plain-+var? construct)))
 
 ;;; Not "var?", so that we don't shadow clojure.core/var?.
-(defn tm-var? [construct]
+(defn- tm-var? [construct]
   (or (*var? construct) (+var? construct)))
 
-(defn plain-var
+(defn- plain-var
   "Return the plain var symbol of a potentially annotated var."
   [var]
   (if (annotated-var? var)
@@ -227,18 +218,18 @@
     var))
 
 ;;; For var, e.g., '+foo', return symbol 'foo'.
-(defn var->root-symbol
+(defn- var->root-symbol
   "Return the symbol resulting from stripping the leading `*` or `+`
   from a var symbol's name."
   [var] ; *var or +var
   (clojure.edn/read-string (subs (str var) 1)))
 
-(defn +var-kind [var]
+(defn- +var-kind [var]
   (if (annotated-+var? var)
     (:kind (second var))
     (var->root-symbol var)))
 
-(defn +var-kind-instances [var matcher-kind-instances]
+(defn- +var-kind-instances [var matcher-kind-instances]
   (let [kind (+var-kind var)]
     (if (set? kind)
       ;; Inline kind instances (no registered kind name).
@@ -247,18 +238,18 @@
       (when kind (clojure.set/union (get @*kind-instances* kind)
                                     (get matcher-kind-instances kind))))))
 
-(defn *var-kind [var]
+(defn- *var-kind [var]
   (if (annotated-*var? var)
     (:kind (second var))
     nil))
 
-(defn var-kind [var]
+(defn- var-kind [var]
   (if (+var? var)
     (+var-kind var)
     ;; Else.
     (*var-kind var)))
 
-(defn var-attributes [var]
+(defn- var-attributes [var]
   (when (annotated-var? var)
     (or (second var) {})))
 
@@ -352,7 +343,7 @@
 ;;;;; ----------------------------------------------------------------
 ;;;;; Template matcher (core):
 
-(defn expand-short-hand-attributes [annotated-var]
+(defn- expand-short-hand-attributes [annotated-var]
   (let [var-sym (first annotated-var)
         attrs (var-attributes annotated-var)]
     (if (seq? attrs)
@@ -376,29 +367,29 @@
                 template)))
 
 ;;; We have an already-in-process var.
-(defn updated-var-val [current-val with-token]
+(defn- updated-var-val [current-val with-token]
   (if (= current-val "")
     with-token
     (str current-val " " with-token)))
 
 (def ^:dynamic *case-sensitive* false)
 
-(defn -case-instance= [template-construct input-token]
+(defn- -case-instance= [template-construct input-token]
   (= (str/lower-case
       ;; Can be called on empty lists.
       (or template-construct ""))
      (str/lower-case (or input-token ""))))
 
-(defn +case-instance= [template-construct input-token]
+(defn- +case-instance= [template-construct input-token]
   ;; No case deviation tolerance.
   (= template-construct input-token))
 
-(defn instance= [template-construct input-token]
+(defn- instance= [template-construct input-token]
   (if *case-sensitive*
     (+case-instance= template-construct input-token)
     (-case-instance= template-construct input-token)))
 
-(defn hasPrefix [s prefix]
+(defn- hasPrefix [s prefix]
   (let [string-size (count s)
         prefix-size (count prefix)]
     (when (>= string-size prefix-size)
@@ -408,7 +399,7 @@
 ;;; search (what's left of) the (selected-down) set.
 ;;;
 ;;; Return the subset of strings (also a set) having the prefix.
-(defn pruned-by-prefix [set-of-strings prefix]
+(defn- pruned-by-prefix [set-of-strings prefix]
   (clojure.set/select (fn [item] (hasPrefix item prefix))
                       set-of-strings))
 
@@ -436,11 +427,11 @@
 
 ;;; This clearly won't scale.  We'd ultimately like an instance
 ;;; retrieval facility to handle case sensitivity.
-(defn downcase-set [s]
+(defn- downcase-set [s]
   (into #{} (map str/lower-case s)))
 
 ;;; Returns nil, if current-+set should not be active.
-(defn initialize-current-+set [current-var bindings matcher-kind-instances]
+(defn- initialize-current-+set [current-var bindings matcher-kind-instances]
   (if-let [current-binding (get bindings (plain-var current-var))]
     #{(str/lower-case current-binding)} ; Have to match later binding.
     (when (+var? current-var)
@@ -449,19 +440,19 @@
           instances
           (downcase-set instances))))))
 
-(defn var-attribute [var attribute]
+(defn- var-attribute [var attribute]
   (when (annotated-var? var)
     (get (second var) attribute)))
 
-(defn instance->tokens [instance]
+(defn- instance->tokens [instance]
   (filter #(= % \space) instance))
 
 (defn count-tokens [instance] ; current-val
   (+ 1 (count (instance->tokens instance))))
 
-(def ^:dynamic *template-vars* #{})
+(def ^:private ^:dynamic *template-vars* #{})
 
-(defn template-vars [template]
+(defn- template-vars [template]
   (let [vars (atom #{})]
     (walk-exprs tm-var?
                 #(swap! vars conj (plain-var %))
@@ -474,7 +465,7 @@
 ;;;
 ;;; Arguably more efficiently done at parse time, but (for now,
 ;;; anyway) we'd like parsed templates cleaner, for tracing/debugging.
-(defn guard-template-vars [bindings template-vars]
+(defn- guard-template-vars [bindings template-vars]
   (let [var (first template-vars)
         template-vars (rest template-vars)
         bindings (if (get bindings var)
@@ -485,21 +476,21 @@
       (guard-template-vars bindings template-vars))))
 
 ;;; This should handle any expression using bound tm-vars and Clojure vars.
-(defn pass-restriction? [bindings-hashmap restriction]
+(defn- pass-restriction? [bindings-hashmap restriction]
   (let [bindings-hashmap (guard-template-vars bindings-hashmap (seq *template-vars*))
         bindings-list (vec (flatten (vec bindings-hashmap)))]
     ;; Evaluate the restriction.
     (eval `(let ~bindings-list
              ~restriction))))
 
-(defn do-action [bindings-hashmap action]
+(defn- do-action [bindings-hashmap action]
   (let [bindings-hashmap (guard-template-vars bindings-hashmap (seq *template-vars*))
         bindings-list (vec (flatten (vec bindings-hashmap)))]
     ;; Evaluate the action.
     (eval `(let ~bindings-list
              ~action))))
 
-(defn qualify-attributes-always? [current-var current-val bindings]
+(defn- qualify-attributes-always? [current-var current-val bindings]
   (and (let [max-tokens (var-attribute current-var :max-tokens)]
          (or (nil? max-tokens)
              (<= (count-tokens current-val) max-tokens)))
@@ -509,7 +500,7 @@
              (pass-restriction? bindings restriction)))
        ))
 
-(defn qualify-attributes-each? [current-var current-token bindings]
+(defn- qualify-attributes-each? [current-var current-token bindings]
   (let [restriction (var-attribute current-var :each?)
         ;; Not really legit bindings (since not current-val), but it's
         ;; what we'll check.
@@ -518,7 +509,7 @@
     (or (nil? restriction)
         (pass-restriction? bindings restriction))))
 
-(defn qualify-always? [current-var current-val current-token bindings
+(defn- qualify-always? [current-var current-val current-token bindings
                        current-+set]
   (and (qualify-attributes-always? current-var current-val bindings)
        (qualify-attributes-each? current-var current-token bindings)
@@ -528,7 +519,7 @@
            ;; +var / any already-bound var needs surviving instances.
            (not (empty? current-+set)))))
 
-(defn qualify-attributes-finally? [current-var current-val bindings]
+(defn- qualify-attributes-finally? [current-var current-val bindings]
   (and (qualify-attributes-always? current-var current-val bindings)
        (let [min-tokens (var-attribute current-var :min-tokens)]
          (or (nil? min-tokens)
@@ -539,7 +530,7 @@
              (pass-restriction? bindings restriction)))
        ))
 
-(defn qualify-finally? [current-var current-val bindings current-+set]
+(defn- qualify-finally? [current-var current-val bindings current-+set]
   (and (qualify-attributes-finally? current-var current-val bindings)
        ;; Qualify +var instance.
        (or (and (*var? current-var)
@@ -549,7 +540,7 @@
            ;; current-val is not in current-+set.
            (contains? current-+set (str/lower-case current-val)))))
 
-(defn updated-kind-instances [matcher-kind-instances current-var current-val]
+(defn- updated-kind-instances [matcher-kind-instances current-var current-val]
   (or (and (annotated-*var? current-var)
            (let [kind (*var-kind current-var)]
              (when kind
@@ -558,7 +549,7 @@
                                   current-val))))
       matcher-kind-instances))
 
-(defn updated-current-+set [current-+set current-var current-val bindings]
+(defn- updated-current-+set [current-+set current-var current-val bindings]
   (when (or (get bindings (plain-var current-var))
             (+var? current-var))
     ;; So, (set? current-+set).
@@ -567,9 +558,9 @@
 ;;; We use this macro to modularize 'match-...'  functions
 ;;; below, to provide a single point of maintenance and avoid typing
 ;;; this same preamble stuff more than once.
-(defmacro def-match-fn [fn-name & body]
+(defmacro ^:private def-match-fn [fn-name & body]
   ;; Can't abide syntax quote's symbol namespacing here.  So, consing.
-  (cons 'defn
+  (cons 'defn-
         (cons fn-name
               (concat '([template-constructs
                          input-tokens
@@ -736,8 +727,8 @@
             :bindings bindings
             :matcher-kind-instances matcher-kind-instances])))
 
-(def ^:dynamic *matches* (atom #{}))
-(def ^:dynamic *matches-countdown* nil)
+(def ^:private ^:dynamic *matches* (atom #{}))
+(def ^:private ^:dynamic *matches-countdown* nil)
 
 ;;; Match input-string against template, creating (generally,
 ;;; multi-token) "instance" bindings for template wildcard symbols.
@@ -923,7 +914,7 @@
 
 ;;; The macros (defined below) have some helper functions.
 
-(defn get-let-binding-form-strings [vars]
+(defn- get-let-binding-form-strings [vars]
   (into [] cat (map (fn [var]
                       [var (list 'get 'bindings-hashmap
                                  (list 'quote var))])
@@ -951,7 +942,7 @@
     (defn-templating-core fn-sym input-sym template let-binding-form body)))
 
 ;;; Another helper.
-(defn get-let-binding-form-symbols [vars]
+(defn- get-let-binding-form-symbols [vars]
   (into [] cat
         (map (fn [var]
                [var (list 'token-matcher.core/instance->symbol ; Fully qualify.
@@ -989,7 +980,7 @@
         ))))
 
 ;;; Helper function.
-(defn instance->quoted-symbol [string]
+(defn- instance->quoted-symbol [string]
   (list 'quote (instance->symbol string)))
 
 ;;; Unless matching fails, execute body with template-bound strings

@@ -409,8 +409,8 @@ attributes include...
       instance registry only locally, until the binding finally is
       included in a recognized match.
 
-    - Earlier *var instances discovered thus can be available to
-      later +vars specifying the same kind.
+    - A template's earlier *var instances discovered thus can be
+      available to its later +vars specifying the same kind.
 
     - An inline set is not an appropriate value for a *var's `:kind`
       attribute.
@@ -440,7 +440,7 @@ attributes include...
   Such forms may refer to earlier template vars (in doing so,
   will reference their bindings) or to a thread's Clojure vars.
   Example, when `*part_1` occurs earlier in a template:
-  `{:finally? (not (= *part_1 *part_2))}`.  In this setting, we
+  `{:finally? (not+ *part_1 *part_2)}`.  In this setting, we
   bind any vars as yet unbound by the matcher to `nil`, so using
   code can branch on that.  See, e.g., our definition for
   `different-when-bound`.  Call functions that are closures to
@@ -451,7 +451,7 @@ attributes include...
   (defn different-when-bound [attrs this other]
     (assoc attrs
            :finally? (conjoin-restrictions `(if (and ~other ~this)
-                                              (not (= ~this ~other))
+                                              (not= ~this ~other)
                                               true)
                                            (get attrs :finally?))))
   ```
