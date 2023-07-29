@@ -354,11 +354,10 @@ controls.  Instead, use a restriction calling `same-when-bound`.
 ## +Vars
 
 We will know all of a +var's possible values before processing it in a
-template.  We provide a few interfaces to inform the matcher of the
-values acceptable for a given +var.  As of v0.2, the matcher uses
-clolog to express and reason about kind instances and kind-subkind
-relationships.  token-matcher provides a kind knowledge base API whose
-elements have the following docstrings.
+template.  As of v0.2, the matcher uses clolog to express and reason
+about kind instances and kind-subkind relationships.  token-matcher
+provides a kind knowledge base API whose elements have the following
+docstrings.
 
 ```clojure
 (def ^:dynamic *kind-assertions*
@@ -798,9 +797,9 @@ Accommodating large kinds could commend adding clolog support for unit
 ground assertions in a database.
 
 The matcher is recursive and has not been architected to support
-`trampoline`---it backtracks via Clojure `or` rather than by passing a
+`trampoline`---it backtracks via Clojure `or`, not by passing a
 continuation (the way clolog does).  As such, feasible match length is
-bounded by Clojure stack limit.
+bounded by the Clojure stack limit.
 
 ## License
 
