@@ -2,15 +2,6 @@
   (:require [clojure.test :refer :all]
             [token-matcher.core :refer :all]))
 
-(deftest kind-interface-test
-  (testing "kind interface"
-    (do (initialize-kind-instances)
-        (add-kind 'object)
-        (add-kind-instance 'object :foo)
-        (add-kind-instance 'object :bar)
-        (is (= #{:bar :foo}
-               (get @*kind-instances* 'object))))))
-
 (deftest parse-template-test
   ;; We need to refer our used public symbols---in contexts where they
   ;; are quoted---because most testers run in the `user` namespace.
@@ -116,11 +107,11 @@
     (is (= '{*foo "bar"} (match "*foo *foo" "bar bar")))
     (is (= nil (match "*foo *foo" "bar bell")))
     ;; Addressing +vars:
-    (binding [*kind-instances* (atom '{kind   #{"really" "really big show"
-                                                "John" "John Smith"}
-                                       kinder #{"kinder" "kinder gentler"
-                                                "something" "something really big"}
-                                       kindle #{"Book 1" "Book 2"}})]
+    (do (install-kind-instance-map '{kind   #{"really" "really big show"
+                                              "John" "John Smith"}
+                                     kinder #{"kinder" "kinder gentler"
+                                              "something" "something really big"}
+                                     kindle #{"Book 1" "Book 2"}})
       ;; Only +vars:
       (is (= '{+kind "really"}
              (match "+kind" "really")))
@@ -138,7 +129,15 @@
       (is (= nil (match "+kindle foo +kindle" "Book 2 foo Book 1")))
       (is (= '{+kinder "something" +kind "really big show"}
              (match "+kinder +kind +kinder" "something really big show something")))
+      ;; Addressing subkinds:
+      (add-subkind 'kind 'kinder)
+      (is (= '{+kind "something"}
+             (match "+kind" "something")))
 ;;; Annotated +vars:
+      (is (= '{+kind "really", +how "something really big"}
+             (match "+kind (:optional [+how {:kind kinder}])" "really something really big")))
+      (is (= nil
+             (match "+kind (:optional [+how {:kind kinder}])" "really not at all")))
       (is (= '{+kind_0 "really"}
              (match "[+kind_0 {:kind kind}]" "really")))
       (is (= '{+kind_0 "really big show"}
@@ -164,7 +163,7 @@
              (match "[+kind_0 {:kind kind}] [+kind_1 {:kind kind}] " "really John"))))
     ;; Daynamically created *vars:
     (is (= '{*happy "really"} (match "[*happy {:kind kind}]" "really")))
-    (binding [*kind-instances* (atom '{})]
+    (do (install-kind-instance-map '{})
       (is (= '{*found "Register", +finding "register"}
              (match "[*found {:kind finding}] this +finding" "Register this register."))))
     ;; Token cardinality specs:
@@ -177,7 +176,7 @@
     (is (= '{*foo "this", *bar "little test"}
            (match "*foo [*bar {:min-tokens 2}]" "this little test")))
     (is (= nil (match "*foo [*bar {:min-tokens 3}]" "this little test")))
-    (binding [*kind-instances* (atom '{})]
+    (do (install-kind-instance-map '{})
       (is (= '{*found "Register", +finding "register"}
              (match "[*found {:kind finding :max-tokens 1}] this +finding"
                     "Register this register."))))
@@ -193,11 +192,11 @@
     (is (= '{*bar "Hello", *foo "Dolly"}
            (match "(:optional *bar) (:optional *baz) *foo"
                   "Hello, Dolly!")))
-    (binding [*kind-instances* (atom '{kind   #{"really" "really big show"
-                                                "John" "John Smith"}
-                                       kinder #{"kinder" "kinder gentler"
-                                                "something" "something really big"}
-                                       kindle #{"Book 1" "Book 2"}})]
+    (do (install-kind-instance-map '{kind   #{"really" "really big show"
+                                              "John" "John Smith"}
+                                     kinder #{"kinder" "kinder gentler"
+                                              "something" "something really big"}
+                                     kindle #{"Book 1" "Book 2"}})
       (is (= '{*rest "Register this item"}
              (match "(:optional +kind) *rest"
                     "Register this item."))))
@@ -304,8 +303,8 @@
       (is (= nil (match "(:+case Foo)" "foo")))
       (is (= nil (match "(:-case Foo) Bar" "foo bar")))
       (is (= {} (match "(:-case Foo) (:-case Bar)" "foo bar")))
-      (binding [*kind-instances* (atom '{kind #{"really" "really big show"
-                                                "John" "John Smith"}})]
+      (do (install-kind-instance-map '{kind #{"really" "really big show"
+                                              "John" "John Smith"}})
         (is (= nil (match "+kind" "john")))))
     (binding [*case-sensitive* false]
       (is (= {} (match "Foo" "foo")))
@@ -356,8 +355,9 @@
 
 (deftest matches-test
   (testing "matches"
-    (initialize-kind-instances)
-    (is (= '[#{{*foo "one", *bar "two three"} {*foo "one two", *bar "three"}} {}]
+    (initialize-matcher)
+    (is (= '#{[{*foo "one", *bar "two three"} #{}]
+	      [{*foo "one two", *bar "three"} #{}]}
            (matches "*foo *bar" "one two three")))
     ))
 

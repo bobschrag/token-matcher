@@ -1,6 +1,6 @@
 (ns token-matcher.core
   (:require [clolog.core :as clolog :refer :all]
-            [clojure.pprint :refer [cl-format]]
+            [clojure.pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set]
             [riddley.walk :refer [walk-exprs]]
@@ -117,8 +117,8 @@
 ;;;;; ----------------------------------------------------------------
 ;;;;; Kind instance registration:
 
-;;; We provide a rich interface---based on clolog---for registering a
-;;; kind's instance strings that a template's +var will match against.
+;;; We use clolog to register a kind's instance strings that a
+;;; template's +var will match against.
 
 (def ^:dynamic *kind-assertions*
   "The knowledge base of assertions for token-matcher kind reasoning.
@@ -127,33 +127,70 @@
   (atom {}))
 
 (defn initialize-kind-assertions []
+  "Clears the kind knowledge base and adds assertions to support
+  subkind reasoning."
   (binding [*assertions* *kind-assertions*]
-    (initialize-prolog))
-  ;; TODO: Assert generic type reasoning.
-  )
+    (initialize-prolog)
+    ;; Sample application knoweldge (facts):
+    (comment
+      (binding [*assertions* *kind-assertions*] 
+        (<- (has-subkind "vertebrate" "mammal"))
+        (<- (has-subkind "mammal" "primate"))
+        (<- (has-subkind "primate" "human"))
+        ;; Idea is to handle instance mentions at any level.
+        (<- (has-kind "Bob" "vertebrate"))
+        (<- (has-kind "Sally" "mammal"))
+        (<- (has-kind "Joe" "primate"))
+        (<- (has-kind "Freida" "human"))))
+    ;; Rules.
+    ;; `has-subkind` is non-transitive (to avoid infinite recursion) .
+    (<- (has-subkind* ?kind ?subkind)
+        (has-subkind ?kind ?subkind))
+    ;; This assertion of `has-subkind*` is transitive.
+    (<- (has-subkind* ?kind ?subsubkind)
+        (has-subkind ?kind ?subkind)
+        (has-subkind* ?subkind ?subsubkind))))
 
 (defn initialize-matcher []
-  (initialize-kind-instances))
+  "Currently, just initializes the kind knoweldge base."
+  (initialize-kind-assertions))
 
-(defn add-kind-instance
-  "Add `instance` to `kind`."
-  ([kind instance]
-   (when-not (get @*kind-instances* kind)
-     (add-kind kind))
-   (swap! *kind-instances* update kind conj instance))
-  ;; Matcher-internal version---does not affect the global.
-  ([instances kind instance]
-   (update (add-kind instances kind) ; No effect for exising kind.
-           kind conj instance)))
+(defn get-kind-instances [kind]
+  "Returns the registered instances of `kind` (including instances of
+  subkinds of `kind`)."
+  (binding [*assertions* *kind-assertions*]
+    ;; My kingdom for a syntax quote version that doesn't fully
+    ;; qualify symbols!  :-)
+    (set (query '?instance `((~'evals-from? ~'?kind (quote ~kind))
+                             (~'or (~'has-kind ~'?instance ~'?kind)
+                              (~'and (~'has-subkind* ~'?kind ~'?subkind)
+                               (~'has-kind ~'?instance ~'?subkind))))))))
 
-(defn- accept-matcher-kind-instances
-  "Merge matcher-local `*kind-instances*` into global, via `swap!`."
-  [local-instances]
-  (map (fn [kind]
-         (map (fn [instance]
-                (add-kind-instance kind instance))
-              (get local-instances kind)))
-       (keys local-instances)))
+(defn add-kind-instance [kind instance]
+  "Adds `instance` to `kind`."
+  (binding [*assertions* *kind-assertions*]
+    (let [assertion `((~'has-kind ~instance ~kind))]
+      ;; We want to avoid duplicates.
+      (assert<- assertion)
+      assertion)))
+
+(defn add-subkind [kind subkind]
+  "Makes `subkind` a subkind of `kind`."
+  (binding [*assertions* *kind-assertions*]
+    (let [assertion `((~'has-subkind ~kind ~subkind))]
+      ;; Avoid duplicates.
+      (assert<- assertion)
+      assertion)))
+
+(defn install-kind-instance-map [kind-instance-map]
+  "Clears the kind knowledge base and asserts instances from a map
+  with kind keys and instance vector values.  See
+  `test/clolog/core_test.clj`."
+  (initialize-kind-assertions)
+  (doseq [kind-instances (vec kind-instance-map)]
+    (let [[kind instances] kind-instances]
+      (doseq [instance instances]
+        (add-kind-instance kind instance)))))
 
 ;;;;; Kind instance registration ^^
 ;;;;; ----------------------------------------------------------------
@@ -229,14 +266,13 @@
     (:kind (second var))
     (var->root-symbol var)))
 
-(defn- +var-kind-instances [var matcher-kind-instances]
+(defn- +var-kind-instances [var]
   (let [kind (+var-kind var)]
     (if (set? kind)
       ;; Inline kind instances (no registered kind name).
       kind
       ;; Registered kind usage.
-      (when kind (clojure.set/union (get @*kind-instances* kind)
-                                    (get matcher-kind-instances kind))))))
+      (when kind (get-kind-instances kind)))))
 
 (defn- *var-kind [var]
   (if (annotated-*var? var)
@@ -403,7 +439,7 @@
   (clojure.set/select (fn [item] (hasPrefix item prefix))
                       set-of-strings))
 
-;;; Given a +var, we'd like to bind some match on *kind-instances*.
+;;; Given a +var, we'd like to bind some match of a kind instances.
 ;;;
 ;;; We could prefer a longest or a shortest going-forward match.  Here
 ;;; we've gone with longest.
@@ -431,11 +467,11 @@
   (into #{} (map str/lower-case s)))
 
 ;;; Returns nil, if current-+set should not be active.
-(defn- initialize-current-+set [current-var bindings matcher-kind-instances]
+(defn- initialize-current-+set [current-var bindings]
   (if-let [current-binding (get bindings (plain-var current-var))]
     #{(str/lower-case current-binding)} ; Have to match later binding.
     (when (+var? current-var)
-      (when-let [instances (+var-kind-instances current-var matcher-kind-instances)]
+      (when-let [instances (+var-kind-instances current-var)]
         (if *case-sensitive*
           instances
           (downcase-set instances))))))
@@ -540,14 +576,12 @@
            ;; current-val is not in current-+set.
            (contains? current-+set (str/lower-case current-val)))))
 
-(defn- updated-kind-instances [matcher-kind-instances current-var current-val]
-  (or (and (annotated-*var? current-var)
-           (let [kind (*var-kind current-var)]
-             (when kind
-               (add-kind-instance matcher-kind-instances
-                                  kind
-                                  current-val))))
-      matcher-kind-instances))
+(defn- assert-kind-var-val [current-var current-val]
+  (let [assertion (and (annotated-*var? current-var)
+                       (let [kind (*var-kind current-var)]
+                         (when kind
+                           (add-kind-instance kind current-val))))]
+    assertion))
 
 (defn- updated-current-+set [current-+set current-var current-val bindings]
   (when (or (get bindings (plain-var current-var))
@@ -565,7 +599,7 @@
               (concat '([template-constructs
                          input-tokens
                          & {:keys [bindings
-                                   matcher-kind-instances
+                                   assertions ; Made during this call to `match`.
                                    current-var
                                    current-val
                                    ;; For +vars, only.  A bit cheesy, but okay.
@@ -577,7 +611,7 @@
                                    ]
                             ;; The keyword arguments' default values.
                             :or {bindings {} ; Excepting current-val.
-                                 matcher-kind-instances {}
+                                 assertions #{} ; What we'll say we've added.
                                  current-var nil
                                  current-val ""
                                  ;; The growing instance (maybe-multi-token string).
@@ -600,7 +634,7 @@
               current-+set (updated-current-+set current-+set current-var current-val bindings)]
           (match-var template-constructs (rest input-tokens)
                      :bindings bindings
-                     :matcher-kind-instances matcher-kind-instances
+                     :assertions assertions
                      :current-var current-var
                      :current-val current-val
                      :current-+set current-+set))))))
@@ -609,17 +643,23 @@
   (when (qualify-finally? current-var current-val bindings current-+set)
     ;; Say we're done (recording current var/val on
     ;; bindings) and try the next var.
-    (let [bindings (assoc bindings (plain-var current-var) current-val)
-          matcher-kind-instances (updated-kind-instances matcher-kind-instances
-                                                         current-var current-val)
-          action (var-attribute current-var :finally.)]
-      ;; Perform any specified action.
-      (or (nil? action)
-          (do-action bindings action))
-      ;; Keep matching.
-      (match-constructs template-constructs input-tokens
-                        :bindings bindings
-                        :matcher-kind-instances matcher-kind-instances))))
+    ;;
+    ;; Arrange for our updates to *kind-assertions* to be unwound upon
+    ;; backtracking.
+    (binding [*kind-assertions* (atom @*kind-assertions*)]
+      (let [bindings (assoc bindings (plain-var current-var) current-val)
+            assertion (assert-kind-var-val current-var current-val)
+            assertions (if assertion
+                         (conj assertions assertion)
+                         assertions)
+            action (var-attribute current-var :finally.)]
+        ;; Perform any specified action.
+        (or (nil? action)
+            (do-action bindings action))
+        ;; Keep matching.
+        (match-constructs template-constructs input-tokens
+                          :bindings bindings
+                          :assertions assertions)))))
 
 ;;; We have an already-in-process var.
 (def-match-fn match-var
@@ -628,7 +668,7 @@
    ;; current value and chug along.
    (match-var-always template-constructs input-tokens
                      :bindings bindings
-                     :matcher-kind-instances matcher-kind-instances
+                     :assertions assertions
                      :current-var current-var
                      :current-val current-val
                      :current-+set current-+set)
@@ -636,7 +676,7 @@
    ;; var to the shortest possible remaining token sequence.
    (match-var-finally template-constructs input-tokens
                       :bindings bindings
-                      :matcher-kind-instances matcher-kind-instances
+                      :assertions assertions
                       :current-var current-var
                       :current-val current-val
                       :current-+set current-+set)))
@@ -649,7 +689,7 @@
       (match-constructs `(~@within-+case-scope ~@beyond-+case-scope)
                         input-tokens
                         :bindings bindings
-                        :matcher-kind-instances matcher-kind-instances)
+                        :assertions assertions)
       (binding [*case-sensitive* true]
         (let [-case-form (when-not (empty? beyond-+case-scope)
                            ;; Elide if empty, else wrap.
@@ -657,7 +697,7 @@
           (match-constructs `(~@within-+case-scope ~@-case-form)
                             input-tokens
                             :bindings bindings
-                            :matcher-kind-instances matcher-kind-instances))))))
+                            :assertions assertions))))))
 
 (def-match-fn match--case
   (let [within--case-scope (rest (first template-constructs))
@@ -667,7 +707,7 @@
       (match-constructs `(~@within--case-scope ~@beyond--case-scope)
                         input-tokens
                         :bindings bindings
-                        :matcher-kind-instances matcher-kind-instances)
+                        :assertions assertions)
       (binding [*case-sensitive* false]
         (let [+case-form (when-not (empty? beyond--case-scope)
                            ;; Elide if empty, else wrap.
@@ -675,7 +715,7 @@
           (match-constructs `(~@within--case-scope ~@+case-form)
                             input-tokens
                             :bindings bindings
-                            :matcher-kind-instances matcher-kind-instances))))))
+                            :assertions assertions))))))
 
 (def-match-fn match-optional
   (let [within-optional-scope (rest (first template-constructs))
@@ -685,11 +725,11 @@
      (match-constructs `(~@within-optional-scope ~@beyond-optional-scope)
                        input-tokens
                        :bindings bindings
-                       :matcher-kind-instances matcher-kind-instances)
+                       :assertions assertions)
      ;; Next try empty content.
      (match-constructs beyond-optional-scope input-tokens
                        :bindings bindings
-                       :matcher-kind-instances matcher-kind-instances))))
+                       :assertions assertions))))
 
 (def-match-fn match-series
   (let [within-series-scope (rest (first template-constructs))
@@ -697,7 +737,7 @@
     (match-constructs `(~@within-series-scope ~@beyond-series-scope)
                       input-tokens
                       :bindings bindings
-                      :matcher-kind-instances matcher-kind-instances)))
+                      :assertions assertions)))
 
 (def-match-fn match-choice
   (let [within-choice-scope (rest (first template-constructs))
@@ -706,13 +746,13 @@
       (or (match-constructs `(~(first within-choice-scope) ~@beyond-choice-scope)
                             input-tokens
                             :bindings bindings
-                            :matcher-kind-instances matcher-kind-instances)
+                            :assertions assertions)
           ;; Skip the call to match-constructs, since we know what's coming.
           (match-choice `((:choice ~@(rest within-choice-scope))
                           ~@beyond-choice-scope)
                         input-tokens
                         :bindings bindings
-                        :matcher-kind-instances matcher-kind-instances)))))
+                        :assertions assertions)))))
 
 (def-match-fn match-control
   (let [controlled (first template-constructs)
@@ -725,9 +765,10 @@
              :choice match-choice)
            [template-constructs input-tokens
             :bindings bindings
-            :matcher-kind-instances matcher-kind-instances])))
+            :assertions assertions])))
 
 (def ^:private ^:dynamic *matches* (atom #{}))
+(def ^:private ^:dynamic *matcher-assertions* (atom #{}))
 (def ^:private ^:dynamic *matches-countdown* nil)
 
 ;;; Match input-string against template, creating (generally,
@@ -740,22 +781,23 @@
       (seq? template-item)
       (match-control template-constructs input-tokens
                      :bindings bindings
-                     :matcher-kind-instances matcher-kind-instances)
+                     :assertions assertions)
 
       (and (empty? template-constructs)
            (empty? input-tokens))
       ;; Succeed (record match and backtrack).
-      (do (accept-matcher-kind-instances matcher-kind-instances)
-          (swap! *matches* conj bindings)
-          (when *matches-countdown*
-            ;; Check for uniqueness?  We have a set.  Do we need it?  TODO
-            (swap! *matches-countdown* dec))
-          (if (and *matches-countdown*
-                   (= @*matches-countdown* 0))
-            ;; Return something truthy, unwinding all matching calls.
-            bindings
-            ;; Else fail, for backtracking.
-            nil))
+      (let [answer [bindings assertions]] 
+        (if (contains? @*matches* answer)
+          nil ; Fail
+          (do (swap! *matches* conj [bindings assertions])
+              (when *matches-countdown*
+                (swap! *matches-countdown* dec))
+              (if (and *matches-countdown*
+                       (= @*matches-countdown* 0))
+                ;; Return something truthy, unwinding all matching calls.
+                [bindings assertions]
+                ;; Else fail, for backtracking.
+                nil))))
 
       ;; Else at least one of template, input still has tokens.
       ;; Optional vars handled at bottom.
@@ -771,18 +813,17 @@
       ;; The front tokens match outright, so check the rest.
       (match-constructs (rest template-constructs) (rest input-tokens)
                         :bindings bindings
-                        :matcher-kind-instances matcher-kind-instances)
+                        :assertions assertions)
 
       :else
       ;; They don't match outright.  Can we find a matching variable binding?
       (when (tm-var? template-item)
         (let [current-var template-item
               current-val (first input-tokens)
-              current-+set (initialize-current-+set current-var bindings
-                                                    matcher-kind-instances)]
+              current-+set (initialize-current-+set current-var bindings)]
 	  (match-var (rest template-constructs) (rest input-tokens)
                      :bindings bindings
-                     :matcher-kind-instances matcher-kind-instances
+                     :assertions assertions
                      :current-var current-var
                      :current-val current-val
                      :current-+set current-+set))))))
@@ -790,7 +831,7 @@
 ;;; The application-level interface to match-constructs:
 
 ;;; Single-match interface, used in most tests.
-(defn match [template input-string]
+(defn match-details [template input-string]
   (let [parsed-template (parse-template template)]
     (binding [*matches* (atom #{})
               *matches-countdown* (atom 1)
@@ -801,6 +842,10 @@
       ;; Not needed: (nth @*matches* 0)
       )))
 
+(defn match [template input-string]
+  (let [[bindings _assertions] (match-details template input-string)]
+    bindings))
+
 ;;; Multi-match interface.
 (defn matches
   ([template input-string]
@@ -810,13 +855,12 @@
    (let [parsed-template (parse-template template)]
      (binding [*matches* (atom #{})
                *matches-countdown* (when limit (atom limit))
-               *template-vars* (template-vars parsed-template)
-               *kind-instances* *kind-instances*]
+               *template-vars* (template-vars parsed-template)]
        (match-constructs parsed-template
                          (parse-input-string input-string))
        ;; A using application should decide what to do with these, when
        ;; *matches* has more than one entry.
-       [@*matches* @*kind-instances*]))))
+       @*matches*))))
 
 ;;; Versions for pre-parsed templates (so that they may be applied
 ;;; many times, without re-parsing):
@@ -838,13 +882,10 @@
   ([parsed-template input-string limit]
    (binding [*matches* (atom #{})
              *matches-countdown* (when limit (atom limit))
-             *template-vars* (template-vars parsed-template)
-             *kind-instances* *kind-instances*]
+             *template-vars* (template-vars parsed-template)]
      (match-constructs parsed-template
                        (parse-input-string input-string))
-     ;; A using application should decide what to do with these, when
-     ;; *matches* has more than one entry.
-     [@*matches* @*kind-instances*])))
+     @*matches*)))
 
 ;;;;; Template matcher (core) ^^
 ;;;;; ----------------------------------------------------------------

@@ -13,25 +13,26 @@ as...
 - Extracting knowledge from free text
 - Standardizing/summarizing conversational input.
 
-In knowledge acquisition and extraction tasks, we have exploited a
-sort of bootstrapping process to populate and then refer to named sets
-(here called "kinds") of allowed instances (strings of one or more
-tokens) for set-linked variables (here called "+vars").  Other
-template variables ("*vars") may be bound to instances apart from
-reference to any named set, may also be tasked (via annotation) to
-extend a named set with their binding---even dynamically, during the
-course of processing a single template.
+The matcher supports two kinds of template matching
+variables---collectively known as "tm-vars."  In knowledge acquisition
+and extraction tasks, we have exploited a sort of bootstrapping
+process to populate and then refer to named sets (here called "kinds")
+of allowed instances (strings of one or more tokens) for set-linked
+tm-vars---"+vars".  Other tm-vars---"*vars"---may be bound to
+instances apart from reference to any named set, may also be tasked
+(via annotation) to extend a named set with their binding---even
+dynamically, during the course of processing a single template.
 
-Var annotations also admit raw Clojure expressions used as
-"restrictions" that qualify would-be-complete or partial var instances
-or as "actions" evaluated for side effects.  We wrap restriction or
-action expressions to make template vars' so-far-matched values (using
-`nil`, if unmatched) accessible.
+Tm-var annotations also admit raw Clojure expressions used as
+"restrictions" that qualify would-be-complete or partial tm-var
+instances or as "actions" evaluated for side effects.  We wrap
+restriction or action expressions to make tm-vars' so-far-matched
+values (using `nil`, if unmatched) accessible.
 
-We call user- or application-defined "short-hand" functions with var
-arguments to help define the attributes of annotated vars.  The
-short-hand functions act like macros whose returned 
-content our parser splices into a match template before processing.
+We call user- or application-defined "short-hand" functions with
+tm-var arguments to help define the attributes of annotated tm-vars.  The
+short-hand functions act like macros whose returned content our parser
+splices into a match template before processing.
 
 Template-embedded lists headed by "control" keywords can be nested to
 turn on or off token matching case sensitivity and to specify
@@ -45,28 +46,16 @@ These constructs contribute towards minimizing repetition of
 expressions among an application's authored templates, thus enhancing
 programmer productivity and product maintainability.
 
-See examples forthcoming next.
-
-We have developed NLP applications using similar (but less versatile)
-matching capabilities integrated with logic programming (e.g., Prolog,
-Datalog) for knowledge representation and reasoning.  We are working
-on a compatible Datalog implementation in Clojure.  We ultimately
-expect logical type reasoning to replace the existing kind registry.
-
-We envision other future token matcher work to increase expressivity
-for emerging use cases, efficiency, robustness, and scale.
-
 ## Example operations
 
 In illustrative examples below, function `match` takes two
 arguments---a template and an input string---returning a hashmap of
-feasible bindings for template variables (*vars and +vars) where such
-exist, else `nil`.  Examples are taken from among tests in
-test/token_matcher/core_test.clj.
+feasible bindings for tm-vars where such exist, else `nil`.  Examples
+are taken from among tests in `test/token_matcher/core_test.clj`.
 
 Sections following these examples present detailed documentation.
 
-### Plain var examples
+### Plain tm-var examples
 
 ```clojure
 > (match "foo" "foo")
@@ -99,7 +88,7 @@ nil ; Apples are not nuts.
 
 ```
 
-### Annotated var examples
+### Annotated tm-var examples
 ```clojure
 > ;;; +Var with inline kind:
 > (match '([+fruits {:kind #{"apples" "pumpkins" "pears"}}]
@@ -162,7 +151,7 @@ nil ; They are equal.
 > (parse-template '([*ints (digits-along {} *ints)]))
 ([*ints {:each? (token-matcher.core/digit-string? *ints)}])
 
-;;; Vars with short-hand calls:
+;;; Tm-Vars with short-hand calls:
 
 > (match '([*int (n-digits-alone {:finally? (> (read-string *int) 99)} 
                                  *int
@@ -241,7 +230,7 @@ should expand (during parsing) into internal form.
 
 \<list-template\> :- `(`\<term\>*`)`
 
-\<term\> :- \<token\> | \<var\> | `(`\<control\> \<term\>*`)`
+\<term\> :- \<token\> | \<tm-var\> | `(`\<control\> \<term\>*`)`
 
 \<token\> :- \<normal-token\> | \<isolated-token\>
 
@@ -254,11 +243,11 @@ a symbol whose name is a token.
 `*chars-to-isolate*` (necessarily including `\(`, `\)`, `\[`, `\]`,
 `\{`, `\}`).
 
-\<var\> :- \<plain-var\> | \<annotated-var\>
+\<tm-var\> :- \<plain-tm-var\> | \<annotated-tm-var\>
 
-\<plain-var\>: A symbol starting with `*` (*var) or `+` (+var).
+\<plain-tm-var\>: A symbol starting with `*` (*var) or `+` (+var).
 
-\<annotated-var\> :- `[`\<plain-var\> \<attrs\>`]`
+\<annotated-tm-var\> :- `[`\<plain-tm-var\> \<attrs\>`]`
 
 \<attrs\> :- `{`\<\<attr-key\> \<attr-val\>\>*`}`
 
@@ -290,7 +279,7 @@ those specified above using ":-".
 
 \<short-hand-fn-sym\>: Symbol naming a short-hand attribute function.
 
-\<fn-arg\> :- \<attrs\> | \<plain-var\> | \<whatever\>
+\<fn-arg\> :- \<attrs\> | \<plain-tm-var\> | \<whatever\>
 
 \<whatever\>: Some Clojure datum.
 
@@ -307,7 +296,7 @@ isolated, and all expressions should conform to the template language.
 To include in a template a token that would cause `read-string`
 to error out, stringify it---as in `"#this"` (in a list) or
 `\"'this\"` (in a string).  Do the same for a token that the
-matcher would recognize as a variable but that you would like
+matcher would recognize as a tm-var but that you would like
 to match explicitly in input---as in `"*that"`.  When `\'` is not
 in `*chars-to-strip*` and not in `*chars-to-isolate*`, do the same
 where `\'` begins a token---as in `"'twas"`.  Otherwise,
@@ -322,13 +311,13 @@ that 7.5")`.  Stringify (double-quote) exceptional tokens
 individually, as in `("#this" that "7.5")`.
 
 To customize what (e.g., punctuation) characters get stripped
-automatically from adjacent tokens, edit or rebind dynamic variable
-`*chars-to-strip*`.  Strippable characters that are not adjacent to
-alphanumeric tokens are discarded.  A single trailing quote mark (`\'`)
-is handled specially, per dynamic variable
+automatically from adjacent tokens, edit or rebind dynamic (Clojure)
+var `*chars-to-strip*`.  Strippable characters that are not adjacent
+to alphanumeric tokens are discarded.  A single trailing quote mark
+(`\'`) is handled specially, per dynamic var
 `*allow-trailing-apostrophe*`.
 
-An application can also rebind dynamic variables...
+An application can also rebind dynamic vars...
 
 - `*token-substitutions*` (hashamp), to standardize selected
   tokens---e.g., to substitute `"a"` for `"an"`
@@ -341,57 +330,89 @@ An application can also rebind dynamic variables...
 We parse the second, string argument to `match` to create a list
 of normal tokens (stripping and isolating chars, per spec).
 
-## Template variables
+## Tm-vars
 
-Vars (template variables) either have matching mode input/output
-(*vars) or mode input-only (+vars).  A *var may match any series of
-tokens.  A +var's permitted matching token series are limited to a
-known set of instances.
+Tm-vars either have matching mode input/output (*vars) or mode
+input-only (+vars).  A *var may match any series of tokens.  A +var's
+permitted matching token series are limited to a known set of
+instances.
 
-Only the template contains vars (not the input string).
+Only the template contains tm-vars (not the input string).
 
-A var, unless in the scope an `:optional` or `:choice` control, must
+A tm-var, unless in the scope an `:optional` or `:choice` control, must
 match at least one input string token.  It may match a greater number
 of tokens.
 
-A var occurring more than once in a template must match consistently.
+A tm-var occurring more than once in a template must match consistently.
 E.g., template `(*foo *foo)` will match input `"bar bar"` but not
 `"bar bell"`.  We take a same-root-named pair of *var and +var (e.g.,
-`*part` and `+part`) to be two different vars not requiring such
+`*part` and `+part`) to be two different tm-vars not requiring such
 consistency.  We recommend against later occurrences transcending
 scopes of earlier occurrences' containing`:optional` or `:choice`
 controls.  Instead, use a restriction calling `same-when-bound`.
 
 ## +Vars
 
-We will know all of a +var's possible values before processing a
-such a variable in a template.  We provide a
-few interfaces to inform the matcher of the values acceptable
-for a given +var.  Your application can...
+We will know all of a +var's possible values before processing it in a
+template.  We provide a few interfaces to inform the matcher of the
+values acceptable for a given +var.  As of v0.2, the matcher uses
+clolog to express and reason about kind instances and kind-subkind
+relationships.  token-matcher provides a kind knowledge base API whose
+elements have the following docstrings.
 
-- Use dynamic variable `*kind-instances*` and associated access
-  functions (e.g., `(add-kind-instance` \<kind\> \<instance\>`))` to
-  register kinds and instances.  A plain var `+foo` then will match
-  any registered instance of kind `foo`.
+```clojure
+(def ^:dynamic *kind-assertions*
+  "The knowledge base of assertions for token-matcher kind reasoning.
+  Initialized to the same value `clolog/initialize-prolog` uses for
+  `clolog/*assertions*`."
+  ;; ...
+  )
 
-- Add a static kind, (say `weekday-trigram`, for values in `#{Sun
-  Mon Tue ...}`) by directly manipulating `*kind-instances*` with
-  Clojure primitives; then include `+weekday-trigram`
-  in your template where such a trigram were expected.
+(defn initialize-kind-assertions []
+  "Clears the kind knowledge base and adds assertions to support
+  subkind reasoning."
+  ;; ...
+  )
 
-- Provide a `:kind` key/value pair in an annotated +var's attribute
-  map (see next item).
+(defn initialize-matcher []
+  "Currently, just initializes the kind knoweldge base."
+  ;; ...
+  )
 
-## Annotated vars
+(defn get-kind-instances [kind]
+  "Returns the registered instances of `kind` (including instances of
+  subkinds of `kind`)."
+  ;; ...
+  )
 
-A template var can either be "plain"---e.g., a single Clojure symbol
-like `*foo` or `+bar`---or "annotated"---a symbol-and-attribute map
-Clojure vector like `[*foo {:kind "football"}]`.  Supported
-attributes include...
+(defn add-kind-instance [kind instance]
+  "Adds `instance` to `kind`."
+  ;; ...
+  )
+
+(defn add-subkind [kind subkind]
+  "Makes `subkind` a subkind of `kind`."
+  ;; ...
+  )
+
+(defn install-kind-instance-map [kind-instance-map]
+  "Clears the kind knowledge base and asserts instances from a map
+  with kind keys and instance vector values.  See
+  `test/clolog/core_test.clj`."
+  ;; ...
+  )
+```
+
+## Annotated tm-vars
+
+A tm-var can either be "plain"---e.g., a single Clojure symbol like
+`*foo` or `+bar`---or "annotated"---a symbol-and-attribute map Clojure
+vector like `[*foo {:kind "football"}]`.  Supported attributes
+include...
 
 - Instance kind specification, as suggested above
 
-  - We can handle different vars of the same kind in a given
+  - We can handle different tm-vars of the same kind in a given
     template this way---as in `"[+subpart {:kind part}] is a part
     of [+superpart {:kind part}]"`.
 
@@ -424,20 +445,20 @@ attributes include...
   partial or full candidate binding.  Three varieties:
  
   - `{:always?` \<condition\>`}`, to check \<condition\> each time a
-    var's candidate binding is extended with a next input token.  So,
+    tm-var's candidate binding is extended with a next input token.  So,
     `[*foo {:max-tokens 2}]` could alternatively be specified as `[*foo
     {:always? (<= (count-tokens *foo) 2)}]`.
   
   - `{:each?` \<condition\>`}`, to check \<condition\> applied just to
-    the next token that would extend a var's candidate binding.  See
+    the next token that would extend a tm-var's candidate binding.  See
     our definition of `digits-along`, for some motivation.
   
   - `{:finally?` \<condition\>`}`, to check \<condition\> only when a
-    var's candidate binding is complete.  So, [*foo {:min-tokens
+    tm-var's candidate binding is complete.  So, [*foo {:min-tokens
     2}] could be specified as `[*foo {:finally? (>= (count-tokens
     *foo) 2)}]`.
   
-  Such forms may refer to earlier template vars (in doing so,
+  Such forms may refer to earlier tm-vars (in doing so,
   will reference their bindings) or to a thread's Clojure vars.
   Example, when `*part_1` occurs earlier in a template:
   `{:finally? (not+ *part_1 *part_2)}`.  In this setting, we
@@ -461,31 +482,44 @@ attributes include...
 - Instance actions---Clojure forms to be evaluated for their side
   effects, once a binding value has been qualified finally.
 
-  In this setting, also, we bind any elided optional-scope vars to
+  In this setting, also, we bind any elided optional-scope tm-vars to
   `nil`.  (`different-when-bound` remains a good reference, form-wise.
   Replace the truthy condition with some side effect.  Call
   `adjoin-actions` rather than `conjoin-restrictions`.)
-
-  While we've arranged for *vars with attribute `:kind` to write their
-  instances to a registry here, we look forward to connecting more
-  general knowledge representation via Datalog or Prolog.  Then an
-  action might connect multiple var's bindings in a logical assertion.
-  As with *var-based dynamic kind instance registration, we plan for
-  any within-template, dynamic logical assertions to be provisional,
-  at least until a match is complete.
-
-  Given that even "qualified finally" bindings may be backtracked out
-  of without having been included in a complete match, we recommend
-  deferring material actions to a template's final var, if not to a
-  calling application (considering that a given template and input
-  string may not match uniquely).
 
   Example: `{:finally. (println (format-cl "Matched *part to
   \'~a\'..." *part))}`.
 
   Wrap multiple actions in `do`.
 
-When a var occurs more than once in a template, a later occurrence's
+  Given that even "qualified finally" bindings may be backtracked out
+  of without having been included in a complete match, we recommend
+  deferring material actions to a template's final tm-var, if not to a
+  calling application (considering that a given template and input
+  string may not match uniquely).
+
+  token-matcher binds `clolog.core/*assertions*` (clolog's Prolog
+  knowledge base---KB) to `*kind-assertions*`.  If, in your actions,
+  you'd like any Prolog operations to pertain to a different KB, wrap
+  your actions in an appropriate context binding (via `binding`)
+  `clolog.core/*assertions*`.
+
+  An action might connect multiple tm-var's bindings in a logical
+  assertion, e.g.  As we do with *var-based dynamic kind instance
+  registration, you might consider treating any within-template, KB
+  actions as provisional until a match is complete and you've had a
+  chance to review their effects.  Consider modifying our source code
+  to...
+
+  - Fork your KB for backtracking search, as we do in
+    `match-var-finally`
+
+  - Track cumulative KB modifications, like our tracking of
+    matcher-added assertions, in `match-var-finally` and pervasively
+    via `def-match-fn`-based argument `:assertions`, finally reported
+    along with a matcher answer in `match-constructs`.
+
+When a tm-var occurs more than once in a template, a later occurrence's
 annotation matters only if all earlier occurrences have been elided,
 per their scope within `:optional` or `:choice` controls.  (We
 recommend against multiple occurrences transcending scopes of earlier
@@ -495,7 +529,7 @@ occurrences must share an earliest occurrence's binding.
 
 ## Attribute short-hand functions
 
-Instead of an explicit attribute map, an annotated var may have a call
+Instead of an explicit attribute map, an annotated tm-var may have a call
 to an attribute "short-hand" function.  The spec `[*int (digits-alone
 {} *int)]`, e.g., expands at parse time to the attribute map `[*int
 {:max-tokens 1, :finally? (digit-string? *int)}]`.  This map's effect
@@ -521,9 +555,9 @@ As you can see in our definitions for `digits-alone` and related
 functions and tests, an attribute short-hand function...
 
 - Should include at least an argument (we use `this`) to
-  accommodate the plain version of the current var (e.g., `*int`).
+  accommodate the plain version of the current tm-var (e.g., `*int`).
 
-- May include arguments to accommodate any vars in using
+- May include arguments to accommodate any tm-vars in using
   templates.
 
 - May include (as all ours do) an argument for an
@@ -548,7 +582,7 @@ functions and tests, an attribute short-hand function...
 Template controls can surround any terms and can be nested.
 
 The mode control `:+case` arranges for its contained terms to be
-processed with dynamic Clojure var `*case-sensitive*` bound to `true`,
+processed with dynamic var `*case-sensitive*` bound to `true`,
 `:-case` to `false`.
 
 The sequence control `:optional` allows its content to be elided.
@@ -565,10 +599,10 @@ implicitly is contained by a `:series` control.
 We provide several interfaces for interacting with the matcher.
 
 - The function `match` returns either a single match (a hashmap
-  associating template variables with token strings) or `nil` (for no
-  match).  `match` returns the first match discovered when binding as
-  as many tokens as possible to each variable when processing
-  templates from left to right.
+  associating tm-vars with token strings) or `nil` (for no match).
+  `match` returns the first match discovered when binding as as many
+  tokens as possible to each tm-var when processing templates from
+  left to right.
 
 - Most general is the function `matches` that returns
   either `nil` or, in a two-element vector...
@@ -598,22 +632,22 @@ We provide several interfaces for interacting with the matcher.
   language).  Multiple matches consistent with a given template/input
   pair are more likely when either...
 
-  - The template has optional vars.
+  - The template has optional tm-vars.
 
-  - The template has consecutive vars---especially consecutive
+  - The template has consecutive tm-vars---especially consecutive
     *vars.
 
-  - The input includes consecutive like tokens that may match a var.
+  - The input includes consecutive like tokens that may match a tm-var.
 
 - `match-pre-parsed` and `matches-pre-parsed`---versions of `match`
   and `matches` that skip the work of parsing, in case a template may
   be applied repeatedly.
 
 - Two macros for defining functions that match an input argument to a
-  fixed template and expose the template's variables and matched
-  values as locals in the defined function's body.  Here again, we
-  bind any elided optional-scope vars to `nil`.  So far, these macros
-  use only `match` (not `matches`).
+  fixed template and expose the template's tm-vars and matched values
+  as locals in the defined function's body.  Here again, we bind any
+  elided optional-scope tm-vars to `nil`.  So far, these macros use only
+  `match` (not `matches`).
 
   - `defn-templating-strings`
 
@@ -636,21 +670,20 @@ cases.
 
 ### Ideas for expressivity
 
-Besides replacing our kind registry with logic-based type reasoning,
-we might...
+We might...
 
 - Enable short-hand function calls at the sequence level, splicing in
   results to yield standard, internal form.  This is an easy lift,
   awaiting a real-world use case where it clearly furthers code
   duplication avoidance.
 
-- Support explicit anonymous vars (say, `*_`, `+_`) for which
+- Support explicit anonymous tm-vars (say, `*_`, `+_`) for which
   no bindings are recorded (so, for which consistency across
   occurrences is not required).
 
-- Handle anonymous vars implicit in the use of sequence controls.
+- Handle anonymous tm-vars implicit in the use of sequence controls.
   Consider the following hypothetical call---free of explicit
-  vars---and its resulting hypothetical match.
+  tm-vars---and its resulting hypothetical match.
 
   ```clojure
   > (match '(:series this
@@ -672,17 +705,17 @@ we might...
   ```
   
   We suppose a using application might benefit by examining such
-  bindings for sequence context vars.
+  bindings for sequence context tm-vars.
 
-  Delivering var-free instance bindings (as above) for series
+  Delivering tm-var-free instance bindings (as above) for series
   containing choices may involve initially (internally) including and
-  then systematically de-referencing such vars.  E.g., an initial
+  then systematically de-referencing such tm-vars.  E.g., an initial
   binding for `*:s1.c3.s1` might be `"starting +:s1.c3.s1.c1
   +:s1.c3.s1.c2"` (perhaps more efficiently left as the list
   `(starting +:s1.c3.s1.c1 +:s1.c3.s1.c2)`).
 
-- Return either longest or shortest var bindings first.  With supposed
-  dynamic variable `*shortest-first*` (and controls `:shortest`,
+- Return either longest or shortest tm-var bindings first.  With
+  supposed dynamic var `*shortest-first*` (and controls `:shortest`,
   `:longest`), prefer eliding optional content.  Handle corresponding
   controls `:shortest`, `:longest` like `:+case`, `:-case`.  Again,
   this is an easy lift for which we await a use case it would clearly
@@ -727,7 +760,7 @@ application mixes, depending on indexing and compilation overhead.
 
   - Track an input's remaining token load, then fail early, should
     load exceed capacity.  Manage also the symmetric case, to catch
-    (e.g.) a template with more necessary (unelidable) tokens and vars
+    (e.g.) a template with more necessary (unelidable) tokens and tm-vars
     than its corresponding input has tokens.
 
 - Employ Clojure's transient collections where appropriate internally,
@@ -758,6 +791,16 @@ broader range of use cases, we might...
 Consider a trie database of kinds/types---ideally one capable of
 optionally case-sensitive queries.  Address logical subtype and
 subpredicate reasoning using this database.
+
+## Limitations
+
+Accommodating large kinds could commend adding clolog support for unit
+ground assertions in a database.
+
+The matcher is recursive and has not been architected to support
+`trampoline`---it backtracks via Clojure `or` rather than by passing a
+continuation (the way clolog does).  As such, feasible match length is
+bounded by Clojure stack limit.
 
 ## License
 
