@@ -603,18 +603,23 @@ We provide several interfaces for interacting with the matcher.
   tokens as possible to each tm-var when processing templates from
   left to right.
 
-- Most general is the function `matches` that returns
-  either `nil` or, in a two-element vector...
+- `match-details` is like `match` but returns either `nil` or a
+  two-element vector including...
 
-  - A set of either all matches or up to a specified number of
-    matches
+  - The result as from `match`
 
-  - A version of `*kind-instances*` as augmented (per annotated *vars
-    with attribute `:type`) locally during matching.
+  - A vector of assertions that were added, ephemerally, to
+    `*kind-assertions*`, to realize the result.  We leave it up to
+    you/your application to add these assertions as warranted.
+
+- Most general is the function `matches` that returns a set of either
+  all results as from `match-details` or up to a specified number of
+  such results.
 
   Our intuition is that applications will require either...
 
-  - A single match if it exists (`match` should suffice.)
+  - A single match if it exists (`match` or `match-details` should
+    suffice.)
 
   - All matches.  (Use `matches` with no limit.)
 
@@ -638,15 +643,15 @@ We provide several interfaces for interacting with the matcher.
 
   - The input includes consecutive like tokens that may match a tm-var.
 
-- `match-pre-parsed` and `matches-pre-parsed`---versions of `match`
-  and `matches` that skip the work of parsing, in case a template may
-  be applied repeatedly.
+- `match-pre-parsed` and `matches-pre-parsed`---versions of
+  `match-details` and `matches` that skip the work of parsing, in case
+  a template may be applied repeatedly.
 
 - Two macros for defining functions that match an input argument to a
   fixed template and expose the template's tm-vars and matched values
   as locals in the defined function's body.  Here again, we bind any
   elided optional-scope tm-vars to `nil`.  So far, these macros use only
-  `match` (not `matches`).
+  `match` (not `match-details` or `matches`).
 
   - `defn-templating-strings`
 

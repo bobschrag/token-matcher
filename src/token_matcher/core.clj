@@ -171,7 +171,7 @@
   (binding [*assertions* *kind-assertions*]
     (let [assertion `((~'has-kind ~instance ~kind))]
       ;; We want to avoid duplicates.
-      (assert<- assertion)
+      (assert<-_ assertion)
       assertion)))
 
 (defn add-subkind [kind subkind]
@@ -179,7 +179,7 @@
   (binding [*assertions* *kind-assertions*]
     (let [assertion `((~'has-subkind ~kind ~subkind))]
       ;; Avoid duplicates.
-      (assert<- assertion)
+      (assert<-_ assertion)
       assertion)))
 
 (defn install-kind-instance-map [kind-instance-map]
@@ -830,7 +830,7 @@
 
 ;;; The application-level interface to match-constructs:
 
-;;; Single-match interface, used in most tests.
+;;; Single-match interface.
 (defn match-details [template input-string]
   (let [parsed-template (parse-template template)]
     (binding [*matches* (atom #{})
@@ -842,6 +842,7 @@
       ;; Not needed: (nth @*matches* 0)
       )))
 
+;;; Used in most tests.
 (defn match [template input-string]
   (let [[bindings _assertions] (match-details template input-string)]
     bindings))
