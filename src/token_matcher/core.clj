@@ -143,6 +143,12 @@
         (<- (has-kind "Joe" "primate"))
         (<- (has-kind "Freida" "human"))))
     ;; Rules.
+    ;; Introduce `thing`, the universal kind.
+    (<- (has-kind* ?instance thing)
+        (has-kind ?instance thing))
+    (<- (has-kind* ?instance ?kind)
+        (has-kind ?instance ?kind))
+    ;; Establish subkind reasoning.
     ;; `has-subkind` is non-transitive (to avoid infinite recursion) .
     (<- (has-subkind* ?kind ?subkind)
         (has-subkind ?kind ?subkind))
@@ -162,7 +168,7 @@
     ;; My kingdom for a syntax quote version that doesn't fully
     ;; qualify symbols!  :-)
     (set (query '?instance `((~'evals-from? ~'?kind (quote ~kind))
-                             (~'or (~'has-kind ~'?instance ~'?kind)
+                             (~'or (~'has-kind* ~'?instance ~'?kind)
                               (~'and (~'has-subkind* ~'?kind ~'?subkind)
                                (~'has-kind ~'?instance ~'?subkind))))))))
 
