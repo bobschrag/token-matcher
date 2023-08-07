@@ -145,7 +145,8 @@
     ;; Rules.
     ;; Introduce `thing`, the universal kind.
     (<- (has-kind* ?instance thing)
-        (has-kind ?instance thing))
+        ;; Any kind with a declared instance is a subkind of `thing`.
+        (first (has-kind ?instance ?kind)))
     (<- (has-kind* ?instance ?kind)
         (has-kind ?instance ?kind))
     ;; Establish subkind reasoning.
