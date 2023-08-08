@@ -159,6 +159,8 @@
   "Currently, just initializes the kind knoweldge base."
   (initialize-kind-assertions))
 
+(declare symbol->instance)
+
 (defn get-kind-instances [kind]
   "Returns the registered instances of `kind` (including instances of
   subkinds of `kind`)."
