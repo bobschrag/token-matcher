@@ -1,5 +1,5 @@
 (ns token-matcher.core
-  (:require [clolog.core :as clolog :refer :all]
+  (:require [clolog.core :as pl :refer :all]
             [clojure.pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set]
@@ -122,8 +122,8 @@
 
 (def ^:dynamic *kind-assertions*
   "The knowledge base of assertions for token-matcher kind reasoning.
-  Initialized to the same value `clolog/initialize-prolog` uses for
-  `clolog/*assertions*`."
+  Initialized to the same value `clolog.core/initialize-prolog` uses
+  for `clolog.core/*assertions*`."
   (atom {}))
 
 (defn initialize-kind-assertions []
@@ -143,13 +143,6 @@
         (<- (has-kind "Joe" "primate"))
         (<- (has-kind "Freida" "human"))))
     ;; Rules.
-    ;; Introduce `thing`, the universal kind.
-    (<- (has-kind* ?instance thing)
-        ;; Any kind with a declared instance is a subkind of `thing`.
-        (first (has-kind ?instance ?kind)))
-    (<- (has-kind* ?instance ?kind)
-        (has-kind ?instance ?kind))
-    ;; Establish subkind reasoning.
     ;; `has-subkind` is non-transitive (to avoid infinite recursion) .
     (<- (has-subkind* ?kind ?subkind)
         (has-subkind ?kind ?subkind))
@@ -166,12 +159,16 @@
   "Returns the registered instances of `kind` (including instances of
   subkinds of `kind`)."
   (binding [*assertions* *kind-assertions*]
-    ;; My kingdom for a syntax quote version that doesn't fully
-    ;; qualify symbols!  :-)
-    (set (query '?instance `((~'evals-from? ~'?kind (quote ~kind))
-                             (~'or (~'has-kind* ~'?instance ~'?kind)
-                              (~'and (~'has-subkind* ~'?kind ~'?subkind)
-                               (~'has-kind ~'?instance ~'?subkind))))))))
+    (set (query '?instance
+                ;; Introduce `thing`, the universal kind.
+                (if (= kind 'thing)
+                  '((has-kind ?instance ?_kind))
+                  ;; My kingdom for a syntax quote version that doesn't fully
+                  ;; qualify symbols!  :-)
+                  `((~'evals-from? ~'?kind (quote ~kind))
+                    (~'or (~'has-kind ~'?instance ~'?kind)
+                     (~'and (~'has-subkind* ~'?kind ~'?subkind)
+                      (~'has-kind ~'?instance ~'?subkind)))))))))
 
 (defn add-kind-instance [kind instance]
   "Adds `instance` to `kind`."
