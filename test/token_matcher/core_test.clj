@@ -351,6 +351,14 @@
       (is (= nil (match '(:series (:optional (:choice (:+case Foo)))) "foo"))))
     (binding [*case-sensitive* true]
       (is (= {} (match '(:series (:optional (:choice (:-case foo)))) "Foo"))))
+    (do (initialize-matcher)
+        (add-kind-instance 'person 'Alex)
+        (add-kind-instance 'person 'Bob)
+        (add-kind-instance 'restricted_resource 'Repo_1))
+    (is (= #{"Repo 1" "Alex" "Bob"}
+           (get-kind-instances 'thing)))
+    (is (= '{*subject "Alex", *predicate "permissioned to", +thing "Repo 1"}
+           (match "*subject is *predicate +thing" "\"Alex\" is permissioned to Repo 1")))
     ))
 
 (deftest matches-test

@@ -133,15 +133,19 @@
     (initialize-prolog)
     ;; Sample application knoweldge (facts):
     (comment
+      ;; In clolog, we could have used strings, throughout (including
+      ;; for predicates).  Sticking with symbols (throughout), for the
+      ;; sake of token-matcher's `defn-templating-symbols`.  Perhaps
+      ;; this could be stratified, (advantageously?)?
       (binding [*assertions* *kind-assertions*] 
-        (<- (has-subkind "vertebrate" "mammal"))
-        (<- (has-subkind "mammal" "primate"))
-        (<- (has-subkind "primate" "human"))
+        (<- (has-subkind vertebrate mammal))
+        (<- (has-subkind mammal primate))
+        (<- (has-subkind primate human))
         ;; Idea is to handle instance mentions at any level.
-        (<- (has-kind "Bob" "vertebrate"))
-        (<- (has-kind "Sally" "mammal"))
-        (<- (has-kind "Joe" "primate"))
-        (<- (has-kind "Freida" "human"))))
+        (<- (has-kind Bob vertebrate))
+        (<- (has-kind Sally mammal))
+        (<- (has-kind Joe primate))
+        (<- (has-kind Freida human))))
     ;; Rules.
     ;; `has-subkind` is non-transitive (to avoid infinite recursion) .
     (<- (has-subkind* ?kind ?subkind)
@@ -159,16 +163,17 @@
   "Returns the registered instances of `kind` (including instances of
   subkinds of `kind`)."
   (binding [*assertions* *kind-assertions*]
-    (set (query '?instance
-                ;; Introduce `thing`, the universal kind.
-                (if (= kind 'thing)
-                  '((has-kind ?instance ?_kind))
-                  ;; My kingdom for a syntax quote version that doesn't fully
-                  ;; qualify symbols!  :-)
-                  `((~'evals-from? ~'?kind (quote ~kind))
-                    (~'or (~'has-kind ~'?instance ~'?kind)
-                     (~'and (~'has-subkind* ~'?kind ~'?subkind)
-                      (~'has-kind ~'?instance ~'?subkind)))))))))
+    (set (map symbol->instance
+              (query '?instance
+                     ;; Introduce `thing`, the universal kind.
+                     (if (= kind 'thing)
+                       '((has-kind ?instance ?_kind))
+                       ;; My kingdom for a syntax quote version that doesn't fully
+                       ;; qualify symbols!  :-)
+                       `((~'evals-from? ~'?kind (quote ~kind))
+                         (~'or (~'has-kind ~'?instance ~'?kind)
+                          (~'and (~'has-subkind* ~'?kind ~'?subkind)
+                           (~'has-kind ~'?instance ~'?subkind))))))))))
 
 (defn add-kind-instance [kind instance]
   "Adds `instance` to `kind`."
