@@ -352,9 +352,9 @@
     (binding [*case-sensitive* true]
       (is (= {} (match '(:series (:optional (:choice (:-case foo)))) "Foo"))))
     (do (initialize-matcher)
-        (add-kind-instance 'person 'Alex)
-        (add-kind-instance 'person 'Bob)
-        (add-kind-instance 'restricted_resource 'Repo_1))
+        (add-kind-instance "person" "Alex")
+        (add-kind-instance "person" "Bob")
+        (add-kind-instance "restricted resource" "Repo 1"))
     (is (= #{"Repo 1" "Alex" "Bob"}
            (get-kind-instances 'thing)))
     (is (= '{*subject "Alex", *predicate "permissioned to", +thing "Repo 1"}
