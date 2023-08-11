@@ -146,13 +146,8 @@
     (<- (has-kind* ?instance ?kind)
         (has-kind ?instance ?kind))
     (<- (has-kind* ?instance ?kind)
-        (ground ?kind)
         (has-subkind* ?kind ?subkind)
         (has-kind ?instance ?subkind))
-    (<- (has-kind* ?instance ?subkind)
-        (has-subkind* ?kind ?subkind)
-        (ground ?subkind)
-        (has-kind ?instance ?kind))
     ;; `has-subkind` is non-transitive (to avoid infinite recursion) .
     (<- (has-subkind* ?kind ?subkind)
         (has-subkind ?kind ?subkind))

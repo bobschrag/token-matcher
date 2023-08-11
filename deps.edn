@@ -1,5 +1,5 @@
 {:deps
- {io.github.bobschrag/clolog {:git/tag "v0.2.6" :git/sha "861f437"}
+ {io.github.bobschrag/clolog {:git/tag "v0.2.7" :git/sha "d7f2cdb"}
   riddley/riddley {:mvn/version "0.2.0"}}
  :aliases
  {:test {:extra-paths ["test"]
