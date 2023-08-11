@@ -107,65 +107,65 @@
     (is (= '{*foo "bar"} (match "*foo *foo" "bar bar")))
     (is (= nil (match "*foo *foo" "bar bell")))
     ;; Addressing +vars:
-    (do (install-kind-instance-map '{kind   #{"really" "really big show"
-                                              "John" "John Smith"}
-                                     kinder #{"kinder" "kinder gentler"
-                                              "something" "something really big"}
-                                     kindle #{"Book 1" "Book 2"}})
-      ;; Only +vars:
-      (is (= '{+kind "really"}
-             (match "+kind" "really")))
-      (is (= '{+kind "really big show"}
-             (match "+kind" "really big show")))
-      (is (= '{+kinder "something" +kind "really big show"}
-             (match "+kinder +kind" "something really big show")))
-      ;; Mixed vars:
-      (is (= '{*silly "any old" +kind "really big show"}
-             (match "*silly +kind" "any old really big show")))
-      (is (= '{*silly "reading" +kindle "Book 2"}
-             (match "*silly +kindle" "reading Book 2")))
-      ;; Multi-occurrence vars:
-      (is (= '{+kindle "Book 2"} (match "+kindle foo +kindle" "Book 2 foo Book 2")))
-      (is (= nil (match "+kindle foo +kindle" "Book 2 foo Book 1")))
-      (is (= '{+kinder "something" +kind "really big show"}
-             (match "+kinder +kind +kinder" "something really big show something")))
-      ;; Addressing subkinds:
-      (add-subkind 'kind 'kinder)
-      (is (= '{+kind "something"}
-             (match "+kind" "something")))
+    (install-kind-instance-map '{kind   #{"really" "really big show"
+                                          "John" "John Smith"}
+                                 kinder #{"kinder" "kinder gentler"
+                                          "something" "something really big"}
+                                 kindle #{"Book 1" "Book 2"}})
+    ;; Only +vars:
+    (is (= '{+kind "really"}
+           (match "+kind" "really")))
+    (is (= '{+kind "really big show"}
+           (match "+kind" "really big show")))
+    (is (= '{+kinder "something" +kind "really big show"}
+           (match "+kinder +kind" "something really big show")))
+    ;; Mixed vars:
+    (is (= '{*silly "any old" +kind "really big show"}
+           (match "*silly +kind" "any old really big show")))
+    (is (= '{*silly "reading" +kindle "Book 2"}
+           (match "*silly +kindle" "reading Book 2")))
+    ;; Multi-occurrence vars:
+    (is (= '{+kindle "Book 2"} (match "+kindle foo +kindle" "Book 2 foo Book 2")))
+    (is (= nil (match "+kindle foo +kindle" "Book 2 foo Book 1")))
+    (is (= '{+kinder "something" +kind "really big show"}
+           (match "+kinder +kind +kinder" "something really big show something")))
+    ;; Addressing subkinds:
+    (add-subkind 'kind 'kinder)
+    (is (= '{+kind "something"}
+           (match "+kind" "something")))
 ;;; Annotated +vars:
-      (is (= '{+kind "really", +how "something really big"}
-             (match "+kind (:optional [+how {:kind kinder}])" "really something really big")))
-      (is (= nil
-             (match "+kind (:optional [+how {:kind kinder}])" "really not at all")))
-      (is (= '{+kind_0 "really"}
-             (match "[+kind_0 {:kind kind}]" "really")))
-      (is (= '{+kind_0 "really big show"}
-             (match "[+kind_0 {:kind kind}]" "really big show")))
-      (is (= '{+kinder_a "something" +kind_0 "really big show"}
-             (match "[+kinder_a {:kind kinder}] [+kind_0 {:kind kind}]"
-                    "something really big show")))
-      ;; Mixed vars:
-      (is (= '{*silly "any old" +kind_0 "really big show"}
-             (match "*silly [+kind_0 {:kind kind}]" "any old really big show")))
-      (is (= '{*silly "reading" +kindle_bar "Book 2"}
-             (match "*silly [+kindle_bar {:kind kindle}]" "reading Book 2")))
-      ;; Multi-occurrence vars:
-      (is (= '{+kindle_bar "Book 2"} (match "[+kindle_bar {:kind kindle}] foo +kindle_bar"
-                                            "Book 2 foo Book 2")))
-      (is (= nil (match "[+kindle_bar {:kind kindle}] foo +kindle_bar"
-                        "Book 2 foo Book 1")))
-      (is (= '{+kinder_a "something" +kind_0 "really big show"}
-             (match "[+kinder_a {:kind kinder}] [+kind_0 {:kind kind}] +kinder_a"
-                    "something really big show something")))
-      ;; Multiple +vars of a kind.
-      (is (= '{+kind_0 "really", +kind_1 "John"}
-             (match "[+kind_0 {:kind kind}] [+kind_1 {:kind kind}] " "really John"))))
+    (is (= '{+kind "really", +how "something really big"}
+           (match "+kind (:optional [+how {:kind kinder}])" "really something really big")))
+    (is (= nil
+           (match "+kind (:optional [+how {:kind kinder}])" "really not at all")))
+    (is (= '{+kind_0 "really"}
+           (match "[+kind_0 {:kind kind}]" "really")))
+    (is (= '{+kind_0 "really big show"}
+           (match "[+kind_0 {:kind kind}]" "really big show")))
+    (is (= '{+kinder_a "something" +kind_0 "really big show"}
+           (match "[+kinder_a {:kind kinder}] [+kind_0 {:kind kind}]"
+                  "something really big show")))
+    ;; Mixed vars:
+    (is (= '{*silly "any old" +kind_0 "really big show"}
+           (match "*silly [+kind_0 {:kind kind}]" "any old really big show")))
+    (is (= '{*silly "reading" +kindle_bar "Book 2"}
+           (match "*silly [+kindle_bar {:kind kindle}]" "reading Book 2")))
+    ;; Multi-occurrence vars:
+    (is (= '{+kindle_bar "Book 2"} (match "[+kindle_bar {:kind kindle}] foo +kindle_bar"
+                                          "Book 2 foo Book 2")))
+    (is (= nil (match "[+kindle_bar {:kind kindle}] foo +kindle_bar"
+                      "Book 2 foo Book 1")))
+    (is (= '{+kinder_a "something" +kind_0 "really big show"}
+           (match "[+kinder_a {:kind kinder}] [+kind_0 {:kind kind}] +kinder_a"
+                  "something really big show something")))
+    ;; Multiple +vars of a kind.
+    (is (= '{+kind_0 "really", +kind_1 "John"}
+           (match "[+kind_0 {:kind kind}] [+kind_1 {:kind kind}] " "really John")))
     ;; Daynamically created *vars:
     (is (= '{*happy "really"} (match "[*happy {:kind kind}]" "really")))
     (do (install-kind-instance-map '{})
-      (is (= '{*found "Register", +finding "register"}
-             (match "[*found {:kind finding}] this +finding" "Register this register."))))
+        (is (= '{*found "Register", +finding "register"}
+               (match "[*found {:kind finding}] this +finding" "Register this register."))))
     ;; Token cardinality specs:
     (is (= '{*foo "this", *bar "little test"}
            (match "[*foo {:max-tokens 1}] *bar" "this little test")))
@@ -177,9 +177,9 @@
            (match "*foo [*bar {:min-tokens 2}]" "this little test")))
     (is (= nil (match "*foo [*bar {:min-tokens 3}]" "this little test")))
     (do (install-kind-instance-map '{})
-      (is (= '{*found "Register", +finding "register"}
-             (match "[*found {:kind finding :max-tokens 1}] this +finding"
-                    "Register this register."))))
+        (is (= '{*found "Register", +finding "register"}
+               (match "[*found {:kind finding :max-tokens 1}] this +finding"
+                      "Register this register."))))
     ;; Optional vars:
     (is (= {} (match "(:optional *bar)" "")))
     (is (= '{*foo "Hello Dolly"}
@@ -196,10 +196,10 @@
                                               "John" "John Smith"}
                                      kinder #{"kinder" "kinder gentler"
                                               "something" "something really big"}
-                                     kindle #{"Book 1" "Book 2"}})
-      (is (= '{*rest "Register this item"}
-             (match "(:optional +kind) *rest"
-                    "Register this item."))))
+                                     kindle #{"Book 1" "Book 2"}}))
+    (is (= '{*rest "Register this item"}
+           (match "(:optional +kind) *rest"
+                  "Register this item.")))
     ;; Inline kind:
     (is (= '{+fruits "apples"}
            (match "[+fruits {:kind #{\"apples\" \"pumpkins\" \"pears\"}}] to +fruits"
@@ -305,7 +305,7 @@
       (is (= {} (match "(:-case Foo) (:-case Bar)" "foo bar")))
       (do (install-kind-instance-map '{kind #{"really" "really big show"
                                               "John" "John Smith"}})
-        (is (= nil (match "+kind" "john")))))
+          (is (= nil (match "+kind" "john")))))
     (binding [*case-sensitive* false]
       (is (= {} (match "Foo" "foo")))
       (is (= nil (match "(:+case Foo)" "foo")))
