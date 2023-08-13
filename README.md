@@ -86,6 +86,9 @@ nil ; No match.
          "apples to apples")
 nil ; Apples are not nuts.
 
+> ;;; `thing` is the universal kind.
+> (match "+thing" "something")
+{+thing "something"}
 ```
 
 ### Annotated tm-var examples
@@ -401,6 +404,10 @@ docstrings.
   ;; ...
   )
 ```
+
+See `test/token-matcher/example-kb-api.clj` for our generic take on
+how a combined clolog/token-matcher application can interact with the
+Prolog knowledge base.
 
 ## Annotated tm-vars
 
@@ -804,7 +811,8 @@ ground assertions in a database.
 The matcher is recursive and has not been architected to support
 `trampoline`---it backtracks via Clojure `or`, not by passing a
 continuation (the way clolog does).  As such, feasible match length is
-bounded by the Clojure stack limit.
+bounded by the Clojure stack limit.  One way to overcome this might be
+to rewrite the matcher's logic in clolog.
 
 ## License
 
@@ -825,5 +833,5 @@ https://www.gnu.org/software/classpath/license.html.
 ## Acknowledgements
 
 Thanks to folks at Franz (Inc.) and at Elemental Cognition (Inc.) for
-posing inspiring problems and to folks on Clojurians Slack channel
-`#beginners` for generous advice.
+posing inspiring problems and to folks on Clojurians Slack channels
+for gracious assistance.

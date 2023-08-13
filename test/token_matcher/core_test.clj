@@ -119,6 +119,8 @@
            (match "+kind" "really big show")))
     (is (= '{+kinder "something" +kind "really big show"}
            (match "+kinder +kind" "something really big show")))
+    (is (= '{+thing "something"}
+           (match "+thing" "something")))
     ;; Mixed vars:
     (is (= '{*silly "any old" +kind "really big show"}
            (match "*silly +kind" "any old really big show")))
