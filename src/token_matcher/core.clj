@@ -122,8 +122,9 @@
 
 (def ^:dynamic *kind-assertions*
   "The knowledge base of assertions for token-matcher kind reasoning.
-  Initialized to the same value `clolog.core/initialize-prolog` uses
-  for `clolog.core/*assertions*`."
+  Initialized (in `initialize-kind-assertions`) to the (empty)
+  initialized Prolog knowledge base."
+  ;; An atom with a placeholder value.
   (atom {}))
 
 (defn initialize-kind-assertions []
@@ -495,7 +496,8 @@
 
 (def ^:private ^:dynamic *template-vars* #{})
 
-(defn- template-vars [template]
+(defn template-vars [template]
+  "Public for application integration."
   (let [vars (atom #{})]
     (walk-exprs tm-var?
                 #(swap! vars conj (plain-var %))
@@ -899,10 +901,12 @@
 ;;;;; ----------------------------------------------------------------
 ;;;;; Template-matching defining forms:
 
-;;; A binding is a string of tokens, e.g., "foo bar" (or "foo").
-;;; Prolog predicates (at least) must be symbols.
-;;; We'll return a corresponding symbol, e.g., foo_bar (or foo).
+;;; A matcher-returned binding is a string of tokens, e.g., "foo
+;;; bar" (or "foo").  When our application used standard
+;;; Prolog---whose predicates must be symbols---we needed the
+;;; following two functions.
 (defn instance->symbol [s]
+  ;; Return a corresponding symbol, e.g., `foo_bar` (or `foo`).
   (when s ; Handle elided optional/chioce-scope vars.
     (clojure.edn/read-string (str/replace s " " "_"))))
 
@@ -960,10 +964,20 @@
   ("We've built some" "here")
 
   )
+;;; Since integrating clolog in v1.1---whose predicates can be
+;;; strings---we use only the `defn-templating-strings` (and not
+;;; `defn-templating-symbols`) in our application.  
 
-;;; The macros (defined below) have some helper functions.
+;;; The macros (defined below) have some helper functions.  We've
+;;; fully qualified some symbols to make these forms exportable.  (It
+;;; turns out that our clolog integration has required copying this
+;;; section of code into our application and modifying
+;;; `defn-templating-core` there so that the call to `match` can
+;;; access the application's knowledge base.  Our copy wraps that call
+;;; with a macro, `with-model`.)
 
-(defn- get-let-binding-form-strings [vars]
+(defn get-let-binding-form-strings [vars]
+  "Public for application integration."
   (into [] cat (map (fn [var]
                       [var (list 'get 'bindings-hashmap
                                  (list 'quote var))])
@@ -975,15 +989,15 @@
   (cons 'defn
         (cons fn-sym
               (cons [input-sym]
-                    (list (list 'let
-                                ['bindings-hashmap (list 'token-matcher.core/match
-                                                         ;; ^^ Fully qualify the above symbol to make this form exportable.
-                                                         (list 'quote template)
-                                                         input-sym)]
-                                (cons 'when
-                                      (list 'bindings-hashmap
-                                            (cons 'let
-                                                  (cons let-binding-form body))))))))))
+                    (list
+                     (list 'let
+                           ['bindings-hashmap (list 'token-matcher.core/match
+                                                    (list 'quote template)
+                                                    input-sym)]
+                           (cons 'when
+                                 (list 'bindings-hashmap
+                                       (cons 'let
+                                             (cons let-binding-form body))))))))))
 
 
 (defmacro defn-templating-strings [fn-sym [template [input-sym]] & body]
