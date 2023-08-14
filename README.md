@@ -357,7 +357,8 @@ controls.  Instead, use a restriction calling `same-when-bound`.
 ## +Vars
 
 We will know all of a +var's possible values before processing it in a
-template.  As of v0.2, the matcher uses clolog to express and reason
+template.  As of v0.2, the matcher uses
+[clolog](https://github.com/bobschrag/clolog) to express and reason
 about kind instances and kind-subkind relationships.  token-matcher
 provides a kind knowledge base API whose elements have the following
 docstrings.
@@ -365,8 +366,8 @@ docstrings.
 ```clojure
 (def ^:dynamic *kind-assertions*
   "The knowledge base of assertions for token-matcher kind reasoning.
-  Initialized to the same value `clolog/initialize-prolog` uses for
-  `clolog/*assertions*`."
+  Initialized (in `initialize-kind-assertions`) to the (empty)
+  initialized Prolog knowledge base."
   ;; ...
   )
 

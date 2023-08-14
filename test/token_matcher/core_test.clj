@@ -119,8 +119,10 @@
            (match "+kind" "really big show")))
     (is (= '{+kinder "something" +kind "really big show"}
            (match "+kinder +kind" "something really big show")))
-    (is (= '{+thing "something"}
+    (is (= '{+thing "something"} ; `thing` is the universal kind.
            (match "+thing" "something")))
+    (is (= nil ; `thing` will match only a registered kind instance.
+           (match "+thing" "unregistered")))
     ;; Mixed vars:
     (is (= '{*silly "any old" +kind "really big show"}
            (match "*silly +kind" "any old really big show")))
