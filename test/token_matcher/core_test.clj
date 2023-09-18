@@ -371,6 +371,20 @@
     (is (= '#{[{*foo "one", *bar "two three"} #{}]
 	      [{*foo "one two", *bar "three"} #{}]}
            (matches "*foo *bar" "one two three")))
+    (is (= '#{[{*foo "one", *bar "two three"} #{}]
+	      [{*foo "one two", *bar "three"} #{}]}
+           (matches "*foo *bar" "one two three" 2)))
+    (is (= '#{[{*foo "one two", *bar "three"} #{}]}
+           (matches "*foo *bar" "one two three" 1)))
+    ;; Unique matches:
+    (is (= [{} #{}]
+           (match-uniquely [] [])))
+    (is (= '[{*foo "one two"} #{}]
+           (match-uniquely "*foo three" "one two three")))
+    (comment ; Errors out.
+      ;; Execution error (AssertionError) at token-matcher.core/match-constructs (REPL:808).
+      ;; Assert failed: Multiple matches found: #{[{*foo "one", *bar "two three"} #{}] [{*foo "one two", *bar "three"} #{}]}
+      (match-uniquely "*foo *bar" "one two three"))
     ))
 
 (deftest defn-templaters-test

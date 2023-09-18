@@ -620,6 +620,9 @@ We provide several interfaces for interacting with the matcher.
     `*kind-assertions*`, to realize the result.  We leave it up to
     you/your application to add these assertions as warranted.
 
+- `match-uniquely` is like `match-details` but raises an error if
+  there is more than one match.
+
 - Most general is the function `matches` that returns a set of either
   all results as from `match-details` or up to a specified number of
   such results.
@@ -632,11 +635,12 @@ We provide several interfaces for interacting with the matcher.
   - All matches.  (Use `matches` with no limit.)
 
   - A single match and whether it is unique.  Use `matches` with a
-    value of `2` for argument `limit`. Considering that if a returned
-    match were not unique, there could be some undesirable ambiguity
-    in a using application's templates and/or the presented input
-    strings, `matches` affords the opportunity either to accept (say,
-    `reset!` the global version) or discard the returned version of
+    value of `2` for argument `limit`, as in
+    `match-uniquely`. Considering that if a returned match were not
+    unique, there could be some undesirable ambiguity in a using
+    application's templates and/or the presented input strings,
+    `matches` affords the opportunity either to accept (say, `reset!`
+    the global version) or discard the returned version of
     `*kind-instances*`.
 
   Multiple matches may be appropriate in some applications, not in

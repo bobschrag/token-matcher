@@ -779,6 +779,7 @@
 (def ^:private ^:dynamic *matches* (atom #{}))
 (def ^:private ^:dynamic *matcher-assertions* (atom #{}))
 (def ^:private ^:dynamic *matches-countdown* nil)
+(def ^:private ^:dynamic *assert-unique-match* false)
 
 ;;; Match input-string against template, creating (generally,
 ;;; multi-token) "instance" bindings for template wildcard symbols.
@@ -803,8 +804,10 @@
                 (swap! *matches-countdown* dec))
               (if (and *matches-countdown*
                        (= @*matches-countdown* 0))
-                ;; Return something truthy, unwinding all matching calls.
-                [bindings assertions]
+                (do (when *assert-unique-match* ; *matches-countdown* started at 2.
+                      (assert false (cl-format nil "Multiple matches found: ~s" @*matches*)))
+                    ;; Return something truthy, unwinding all matching calls.
+                    [bindings assertions])
                 ;; Else fail, for backtracking.
                 nil))))
 
@@ -855,6 +858,16 @@
 (defn match [template input-string]
   (let [[bindings _assertions] (match-details template input-string)]
     bindings))
+
+(defn match-uniquely [template input-string]
+  (let [parsed-template (parse-template template)]
+    (binding [*matches* (atom #{})
+              *matches-countdown* (atom 2)
+              *assert-unique-match* true
+              *template-vars* (template-vars parsed-template)]
+      (match-constructs parsed-template
+                        (parse-input-string input-string))
+      (first @*matches*))))
 
 ;;; Multi-match interface.
 (defn matches
